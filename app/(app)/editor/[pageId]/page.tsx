@@ -6,6 +6,12 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { SectionRenderer } from "@/components/sections";
 import { CommentPopover } from "@/components/comment-popover";
 import { Theme, SectionType } from "@/lib/sections/definitions";
@@ -72,6 +78,38 @@ export default function EditorPage({
     }
   }, [selectedTool, selectedElement]);
 
+  // Keyboard shortcuts for tool selection
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in an input or textarea
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable)
+      ) {
+        return;
+      }
+
+      switch (event.key.toLowerCase()) {
+        case "v":
+          setSelectedTool("cursor");
+          break;
+        case "m":
+          setSelectedTool("move");
+          break;
+        case "c":
+          setSelectedTool("comment");
+          break;
+        case "l":
+          setSelectedTool(selectedTool === "layers" ? "cursor" : "layers");
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedTool]);
+
   const handleElementClick = useCallback(
     (element: HTMLElement, sectionId: string, sectionType: string, event: React.MouseEvent) => {
       // Remove highlight from previous element
@@ -134,13 +172,15 @@ export default function EditorPage({
   if (page === null) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold">Page not found</h2>
-          <p className="text-muted-foreground">
-            This landing page doesn&apos;t exist or you don&apos;t have access
-            to it.
-          </p>
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Page not found</EmptyTitle>
+            <EmptyDescription>
+              This landing page doesn&apos;t exist or you don&apos;t have access
+              to it.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   }
@@ -218,14 +258,14 @@ export default function EditorPage({
                 <div className="h-32 rounded bg-muted" />
               </div>
             ) : sections.length === 0 ? (
-              <div className="flex h-96 items-center justify-center text-muted-foreground">
-                <div className="text-center">
-                  <p className="mb-2">No sections yet.</p>
-                  <p className="text-sm">
+              <Empty className="h-96">
+                <EmptyHeader>
+                  <EmptyTitle>No sections yet</EmptyTitle>
+                  <EmptyDescription>
                     This page is still being generated.
-                  </p>
-                </div>
-              </div>
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               <div>
                 {sections.map((section: any) => (
