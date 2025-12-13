@@ -15,6 +15,19 @@ export const me = query({
   },
 });
 
+// Get user by email (for agent actions)
+export const getByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx: any, args: { email: string }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q: any) => q.eq("email", args.email))
+      .first();
+
+    return user;
+  },
+});
+
 // Ensure user exists in the users table after authentication
 // This should be called after login to sync better-auth user with our users table
 export const ensureUser = mutation({
