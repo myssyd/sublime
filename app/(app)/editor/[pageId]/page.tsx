@@ -13,7 +13,7 @@ import { getSectionDisplayName } from "@/lib/sections/metadata";
 import {
   Cursor01Icon,
   Move01Icon,
-  Comment01Icon,
+  CommentAdd02Icon,
   Layers01Icon,
   ArrowLeft01Icon,
   ComputerIcon,
@@ -312,7 +312,7 @@ export default function EditorPage({
             onClick={() => setSelectedTool("comment")}
             title="Comment (C)"
           >
-            <HugeiconsIcon icon={Comment01Icon} className="w-4 h-4" />
+            <HugeiconsIcon icon={CommentAdd02Icon} className="w-4 h-4" />
           </Button>
           <div className="w-px h-6 bg-border mx-1" />
           <Button
