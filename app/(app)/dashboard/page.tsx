@@ -5,6 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { File02Icon } from "@hugeicons/core-free-icons";
 import {
   Card,
   CardContent,
@@ -12,6 +14,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
@@ -63,32 +73,22 @@ export default function DashboardPage() {
           ))}
         </div>
       ) : pages.length === 0 ? (
-        <Card className="py-12 text-center">
-          <CardContent>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <svg
-                className="h-6 w-6 text-muted-foreground"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-            </div>
-            <h3 className="mb-2 text-lg font-medium">No landing pages yet</h3>
-            <p className="mb-4 text-muted-foreground">
+        <Empty className="border py-12">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={File02Icon} />
+            </EmptyMedia>
+            <EmptyTitle>No landing pages yet</EmptyTitle>
+            <EmptyDescription>
               Create your first landing page with AI assistance
-            </p>
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
             <Link href="/new">
               <Button>Create Your First Page</Button>
             </Link>
-          </CardContent>
-        </Card>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {pages.map((page: any) => (

@@ -4,7 +4,17 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Image03Icon } from "@hugeicons/core-free-icons";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
 
 // Placeholder for Sprint 5 - Media Library
 export default function MediaPage() {
@@ -44,30 +54,20 @@ export default function MediaPage() {
           ))}
         </div>
       ) : media.length === 0 ? (
-        <Card className="py-12 text-center">
-          <CardContent>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <svg
-                className="h-6 w-6 text-muted-foreground"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-            <h3 className="mb-2 text-lg font-medium">No media yet</h3>
-            <p className="mb-4 text-muted-foreground">
+        <Empty className="border py-12">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={Image03Icon} />
+            </EmptyMedia>
+            <EmptyTitle>No media yet</EmptyTitle>
+            <EmptyDescription>
               Upload images to use in your landing pages
-            </p>
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
             <Button>Upload Your First Image</Button>
-          </CardContent>
-        </Card>
+          </EmptyContent>
+        </Empty>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {media.map((item: any) => (
