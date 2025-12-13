@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -94,11 +95,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                    {session?.user?.name?.[0]?.toUpperCase() ||
-                      session?.user?.email?.[0]?.toUpperCase() ||
-                      "U"}
-                  </div>
+                  <Avatar>
+                    <AvatarImage src={session?.user?.image ?? undefined} alt={session?.user?.name ?? "User"} />
+                    <AvatarFallback>
+                      {session?.user?.name?.[0]?.toUpperCase() ||
+                        session?.user?.email?.[0]?.toUpperCase() ||
+                        "U"}
+                    </AvatarFallback>
+                  </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
