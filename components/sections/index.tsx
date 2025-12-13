@@ -45,9 +45,14 @@ interface SectionRendererProps {
   content: any;
   theme: Theme;
   className?: string;
-  onClick?: () => void;
-  isSelected?: boolean;
+  isCommentMode?: boolean;
+  selectedElement?: HTMLElement | null;
+  onElementClick?: (element: HTMLElement, event: React.MouseEvent) => void;
 }
+
+// Selector for interactive elements
+const INTERACTIVE_ELEMENTS_SELECTOR =
+  'h1, h2, h3, h4, h5, h6, p, span, a, button, img, li, div[class*="card"], div[class*="item"]';
 
 // Dynamic section renderer
 export function SectionRenderer({
@@ -55,29 +60,65 @@ export function SectionRenderer({
   content,
   theme,
   className,
-  onClick,
-  isSelected,
+  isCommentMode,
+  selectedElement,
+  onElementClick,
 }: SectionRendererProps) {
   const Component = sectionRegistry[type as SectionType];
 
   if (!Component) {
     console.warn(`Unknown section type: ${type}`);
     return (
-      <div
-        className="p-8 text-center border-2 border-dashed border-red-300 rounded-lg"
-        onClick={onClick}
-      >
+      <div className="p-8 text-center border-2 border-dashed border-red-300 rounded-lg">
         <p className="text-red-500">Unknown section type: {type}</p>
       </div>
     );
   }
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isCommentMode || !onElementClick) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Find the closest interactive element (not the section wrapper itself)
+    const target = e.target as HTMLElement;
+    const interactiveElement = target.closest(
+      INTERACTIVE_ELEMENTS_SELECTOR
+    ) as HTMLElement;
+
+    if (interactiveElement) {
+      onElementClick(interactiveElement, e);
+    } else {
+      // Fallback to the clicked element itself
+      onElementClick(target, e);
+    }
+  };
+
   return (
     <div
-      className={`relative ${isSelected ? "ring-2 ring-blue-500 ring-offset-2" : ""}`}
-      onClick={onClick}
+      className={`relative ${isCommentMode ? "section-comment-mode" : ""}`}
+      onClick={handleClick}
     >
       <Component content={content} theme={theme} className={className} />
+
+      {/* Comment mode styles */}
+      {isCommentMode && (
+        <style jsx global>{`
+          .section-comment-mode * {
+            cursor: pointer !important;
+          }
+          .section-comment-mode *:hover {
+            outline: 2px dashed #3b82f6 !important;
+            outline-offset: 2px !important;
+          }
+          .comment-selected-element {
+            outline: 2px dashed #3b82f6 !important;
+            outline-offset: 2px !important;
+            background-color: rgba(59, 130, 246, 0.1) !important;
+          }
+        `}</style>
+      )}
     </div>
   );
 }

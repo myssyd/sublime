@@ -1,13 +1,14 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useCallback, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { SectionRenderer } from "@/components/sections";
-import { Theme } from "@/lib/sections/definitions";
+import { CommentPopover } from "@/components/comment-popover";
+import { Theme, SectionType } from "@/lib/sections/definitions";
 import { getSectionDisplayName } from "@/lib/sections/metadata";
 import {
   Cursor01Icon,
@@ -24,6 +25,18 @@ import Link from "next/link";
 
 type ViewportMode = "desktop" | "tablet" | "mobile";
 
+// Helper to get element info for display
+function getElementInfo(element: HTMLElement, sectionType: string): string {
+  const tagName = element.tagName.toLowerCase();
+  const textContent = element.textContent?.trim().slice(0, 30) || "";
+  const sectionName = getSectionDisplayName(sectionType as SectionType);
+
+  if (textContent) {
+    return `${sectionName} > ${tagName}: "${textContent}${textContent.length >= 30 ? "..." : ""}"`;
+  }
+  return `${sectionName} > ${tagName}`;
+}
+
 export default function EditorPage({
   params,
 }: {
@@ -38,6 +51,68 @@ export default function EditorPage({
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
     null
   );
+
+  // Element-level selection state
+  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
+  const [selectedElementInfo, setSelectedElementInfo] = useState<string>("");
+  const [selectedElementSectionId, setSelectedElementSectionId] = useState<string | null>(null);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | undefined>(undefined);
+
+  // Clear selection when tool changes
+  useEffect(() => {
+    if (selectedTool !== "comment") {
+      if (selectedElement) {
+        selectedElement.classList.remove("comment-selected-element");
+      }
+      setSelectedElement(null);
+      setSelectedElementInfo("");
+      setSelectedElementSectionId(null);
+      setIsPopoverOpen(false);
+    }
+  }, [selectedTool, selectedElement]);
+
+  const handleElementClick = useCallback(
+    (element: HTMLElement, sectionId: string, sectionType: string, event: React.MouseEvent) => {
+      // Remove highlight from previous element
+      if (selectedElement) {
+        selectedElement.classList.remove("comment-selected-element");
+      }
+
+      // Add highlight to new element
+      element.classList.add("comment-selected-element");
+
+      // Update state
+      setSelectedElement(element);
+      setSelectedElementInfo(getElementInfo(element, sectionType));
+      setSelectedElementSectionId(sectionId);
+      setClickPosition({ x: event.clientX, y: event.clientY });
+      setIsPopoverOpen(true);
+    },
+    [selectedElement]
+  );
+
+  const handleClosePopover = useCallback(() => {
+    if (selectedElement) {
+      selectedElement.classList.remove("comment-selected-element");
+    }
+    setSelectedElement(null);
+    setSelectedElementInfo("");
+    setSelectedElementSectionId(null);
+    setClickPosition(undefined);
+    setIsPopoverOpen(false);
+  }, [selectedElement]);
+
+  const handleCommentSubmit = async (comment: string, model: string) => {
+    // TODO: Implement comment submission via Convex
+    console.log("Comment submitted:", {
+      comment,
+      model,
+      sectionId: selectedElementSectionId,
+      elementInfo: selectedElementInfo,
+    });
+    handleClosePopover();
+  };
 
   const page = useQuery(
     api.landingPages.get,
@@ -159,16 +234,25 @@ export default function EditorPage({
                     type={section.type}
                     content={section.content}
                     theme={theme}
-                    isSelected={selectedSectionId === section._id}
-                    onClick={
-                      selectedTool === "comment"
-                        ? () => setSelectedSectionId(section._id)
-                        : undefined
+                    isCommentMode={selectedTool === "comment"}
+                    selectedElement={selectedElement}
+                    onElementClick={(element, event) =>
+                      handleElementClick(element, section._id, section.type, event)
                     }
                   />
                 ))}
               </div>
             )}
+
+            {/* Comment Popover */}
+            <CommentPopover
+              isOpen={isPopoverOpen}
+              onClose={handleClosePopover}
+              onSubmit={handleCommentSubmit}
+              targetElement={selectedElement}
+              elementInfo={selectedElementInfo}
+              clickPosition={clickPosition}
+            />
           </div>
         </div>
 
