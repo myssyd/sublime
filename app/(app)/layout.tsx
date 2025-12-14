@@ -22,6 +22,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         .then(() => setUserEnsured(true))
         .catch(console.error);
     }
+    // Reset userEnsured when session is cleared (logout)
+    if (!session && userEnsured) {
+      setUserEnsured(false);
+    }
   }, [session, userEnsured, ensureUser]);
 
   const usage = useQuery(api.usage.getUsage, session && userEnsured ? {} : "skip");
