@@ -12,9 +12,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowUp01Icon, Loading01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { ArrowUp01Icon, Loading01Icon, Cancel01Icon, Tick01Icon, ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
 
-type AnimationPhase = 'idle' | 'content-fading' | 'morphing' | 'loading';
+type AnimationPhase = 'idle' | 'content-fading' | 'morphing' | 'loading' | 'preview';
 
 interface CommentPopoverProps {
   isOpen: boolean;
@@ -24,6 +24,12 @@ interface CommentPopoverProps {
   elementInfo: string;
   clickPosition?: { x: number; y: number };
   isProcessing?: boolean;
+  // Preview mode props
+  previewMode?: boolean;
+  isShowingNewContent?: boolean;
+  onTogglePreview?: () => void;
+  onAcceptChanges?: () => void;
+  onRejectChanges?: () => void;
 }
 
 const AI_MODELS = [
@@ -41,6 +47,11 @@ export function CommentPopover({
   elementInfo,
   clickPosition,
   isProcessing = false,
+  previewMode = false,
+  isShowingNewContent = true,
+  onTogglePreview,
+  onAcceptChanges,
+  onRejectChanges,
 }: CommentPopoverProps) {
   const [comment, setComment] = useState("");
   const [model, setModel] = useState("gemini");
@@ -111,7 +122,7 @@ export function CommentPopover({
     }
   }, [isOpen]);
 
-  // Handle animation phase transitions when processing starts
+  // Handle animation phase transitions when processing starts/ends
   useEffect(() => {
     if (isProcessing) {
       // Start the animation sequence: content fade out
@@ -131,10 +142,13 @@ export function CommentPopover({
         clearTimeout(morphTimer);
         clearTimeout(loadingTimer);
       };
+    } else if (previewMode) {
+      // AI returned content - transition to preview
+      setAnimationPhase('preview');
     } else {
       setAnimationPhase('idle');
     }
-  }, [isProcessing]);
+  }, [isProcessing, previewMode]);
 
   // Handle click outside
   useEffect(() => {
@@ -167,7 +181,7 @@ export function CommentPopover({
     try {
       await onSubmit(comment, model);
       setComment("");
-      onClose();
+      // Don't close - the popover will morph into loading then preview state
     } catch (error) {
       console.error("Failed to submit comment:", error);
     } finally {
@@ -187,10 +201,19 @@ export function CommentPopover({
 
   if (!isOpen || typeof window === "undefined") return null;
 
-  // Determine if we're in loading mode (morphing or loading phase)
+  // Determine if we're in a pill mode (loading or preview)
   const isInLoadingMode = animationPhase === 'morphing' || animationPhase === 'loading';
-  const isContentFading = animationPhase === 'content-fading' || isInLoadingMode;
+  const isInPreviewMode = animationPhase === 'preview';
+  const isInPillMode = isInLoadingMode || isInPreviewMode;
+  const isContentFading = animationPhase === 'content-fading' || isInPillMode;
   const showLoadingDots = animationPhase === 'loading';
+
+  // Calculate pill width based on state
+  const getPillWidth = () => {
+    if (isInPreviewMode) return '100px'; // Wider for 3 buttons
+    if (isInLoadingMode) return '56px';
+    return '384px';
+  };
 
   return createPortal(
     <div
@@ -201,10 +224,10 @@ export function CommentPopover({
       style={{
         top: position.top,
         left: position.left,
-        width: isInLoadingMode ? '56px' : '384px',
-        height: isInLoadingMode ? '32px' : 'auto',
-        borderRadius: isInLoadingMode ? '9999px' : '8px',
-        padding: isInLoadingMode ? '0' : '12px',
+        width: getPillWidth(),
+        height: isInPillMode ? '32px' : 'auto',
+        borderRadius: isInPillMode ? '9999px' : '8px',
+        padding: isInPillMode ? '0' : '12px',
         transition: 'width 200ms ease-out, height 200ms ease-out, border-radius 200ms ease-out, padding 200ms ease-out',
       }}
     >
@@ -213,7 +236,7 @@ export function CommentPopover({
         className="transition-opacity duration-150"
         style={{
           opacity: isContentFading ? 0 : 1,
-          visibility: isInLoadingMode ? 'hidden' : 'visible',
+          visibility: isInPillMode ? 'hidden' : 'visible',
         }}
       >
         {/* Header with element info and close button */}
@@ -297,6 +320,44 @@ export function CommentPopover({
               className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce"
               style={{ animationDelay: "300ms", animationDuration: "600ms" }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Preview buttons - shown when AI has returned results */}
+      {isInPreviewMode && (
+        <div className="absolute inset-0 flex items-center justify-center animate-in fade-in-0 duration-150">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 rounded-full"
+              onClick={onTogglePreview}
+              title={isShowingNewContent ? "Show original" : "Show changes"}
+            >
+              <HugeiconsIcon
+                icon={isShowingNewContent ? ViewIcon : ViewOffIcon}
+                className="w-3.5 h-3.5"
+              />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 rounded-full text-destructive hover:text-destructive"
+              onClick={onRejectChanges}
+              title="Reject changes"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6 rounded-full text-green-600 hover:text-green-600"
+              onClick={onAcceptChanges}
+              title="Accept changes"
+            >
+              <HugeiconsIcon icon={Tick01Icon} className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState, useCallback, useEffect } from "react";
-import { useQuery, useAction } from "convex/react";
+import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSession } from "@/lib/auth-client";
@@ -68,8 +68,19 @@ export default function EditorPage({
   // Processing state for AI comment handling
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Preview state for AI-generated changes
+  const [previewContent, setPreviewContent] = useState<{
+    sectionId: string;
+    oldContent: any;
+    newContent: any;
+  } | null>(null);
+  const [isShowingNewContent, setIsShowingNewContent] = useState(true);
+
   // AI action for processing comments
   const processComment = useAction(api.agents.actions.processComment);
+
+  // Mutation for updating section content
+  const updateSection = useMutation(api.sections.update);
 
   // Clear selection when tool changes
   useEffect(() => {
@@ -148,12 +159,14 @@ export default function EditorPage({
   }, [selectedElement]);
 
   const handleCommentSubmit = async (comment: string, model: string) => {
-    if (!selectedElement || !selectedElementSectionId) return;
+    if (!selectedElement || !selectedElementSectionId || !sections) return;
 
-    // Store the element for processing
-    const elementToProcess = selectedElement;
     const sectionId = selectedElementSectionId;
     const elementInfo = selectedElementInfo;
+
+    // Find the current section content
+    const currentSection = sections.find((s: any) => s._id === sectionId);
+    if (!currentSection) return;
 
     // Start processing - keep popover open, it will morph into loading indicator
     setIsProcessing(true);
@@ -166,27 +179,53 @@ export default function EditorPage({
         model,
       });
 
-      // TODO: If updatedContent is returned, update the section in the database
-      // The SectionRenderer will automatically re-render with the new content
+      // If AI returned updated content, store for preview
       if (result.updatedContent) {
-        console.log("Updated content:", result.updatedContent);
-        // TODO: Call a mutation to update the section content
+        setPreviewContent({
+          sectionId,
+          oldContent: currentSection.content,
+          newContent: result.updatedContent,
+        });
+        setIsShowingNewContent(true); // Show new content by default
       }
     } catch (error) {
       console.error("Failed to process comment:", error);
+      // On error, close everything
+      handleClosePopover();
     } finally {
-      // Clear processing state and close popover
+      // Stop processing - this will trigger transition to preview mode if previewContent is set
       setIsProcessing(false);
-      setIsPopoverOpen(false);
-      setClickPosition(undefined);
-
-      // Clear element highlight
-      elementToProcess.classList.remove("comment-selected-element");
-      setSelectedElement(null);
-      setSelectedElementInfo("");
-      setSelectedElementSectionId(null);
     }
   };
+
+  // Preview handlers
+  const handleTogglePreview = useCallback(() => {
+    setIsShowingNewContent((prev) => !prev);
+  }, []);
+
+  const handleAcceptChanges = useCallback(async () => {
+    if (!previewContent) return;
+
+    try {
+      // Save the new content to database
+      await updateSection({
+        id: previewContent.sectionId as Id<"sections">,
+        content: previewContent.newContent,
+      });
+    } catch (error) {
+      console.error("Failed to save changes:", error);
+    } finally {
+      // Clear preview and close popover
+      setPreviewContent(null);
+      handleClosePopover();
+    }
+  }, [previewContent, updateSection, handleClosePopover]);
+
+  const handleRejectChanges = useCallback(() => {
+    // Discard preview and close popover
+    setPreviewContent(null);
+    handleClosePopover();
+  }, [handleClosePopover]);
 
   const page = useQuery(
     api.landingPages.get,
@@ -304,19 +343,27 @@ export default function EditorPage({
               </Empty>
             ) : (
               <div>
-                {sections.map((section: any) => (
-                  <SectionRenderer
-                    key={section._id}
-                    type={section.type}
-                    content={section.content}
-                    theme={theme}
-                    isCommentMode={selectedTool === "comment"}
-                    selectedElement={selectedElement}
-                    onElementClick={(element, event) =>
-                      handleElementClick(element, section._id, section.type, event)
-                    }
-                  />
-                ))}
+                {sections.map((section: any) => {
+                  // Use preview content if this section is being previewed
+                  const isPreviewingThisSection = previewContent !== null && previewContent.sectionId === section._id;
+                  const displayContent = isPreviewingThisSection
+                    ? (isShowingNewContent ? previewContent.newContent : previewContent.oldContent)
+                    : section.content;
+
+                  return (
+                    <SectionRenderer
+                      key={section._id}
+                      type={section.type}
+                      content={displayContent}
+                      theme={theme}
+                      isCommentMode={selectedTool === "comment"}
+                      selectedElement={selectedElement}
+                      onElementClick={(element, event) =>
+                        handleElementClick(element, section._id, section.type, event)
+                      }
+                    />
+                  );
+                })}
               </div>
             )}
 
@@ -329,6 +376,11 @@ export default function EditorPage({
               elementInfo={selectedElementInfo}
               clickPosition={clickPosition}
               isProcessing={isProcessing}
+              previewMode={previewContent !== null}
+              isShowingNewContent={isShowingNewContent}
+              onTogglePreview={handleTogglePreview}
+              onAcceptChanges={handleAcceptChanges}
+              onRejectChanges={handleRejectChanges}
             />
           </div>
         </div>
