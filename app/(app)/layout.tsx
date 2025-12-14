@@ -6,6 +6,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSession } from "@/lib/auth-client";
 import { AppNav } from "@/components/app-nav";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Loading03Icon } from "@hugeicons/core-free-icons";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -34,7 +36,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (isPending || (session && !userEnsured)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <HugeiconsIcon
+          icon={Loading03Icon}
+          className="w-8 h-8 text-muted-foreground animate-spin"
+          style={{ animationDuration: "0.5s" }}
+        />
       </div>
     );
   }

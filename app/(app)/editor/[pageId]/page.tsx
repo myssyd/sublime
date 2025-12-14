@@ -41,6 +41,8 @@ import {
 import { RightSidebar } from "@/components/editor/right-sidebar";
 import { ChatSidebar } from "@/components/editor/chat-sidebar";
 import { DraggableSection } from "@/components/editor/draggable-section";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Loading03Icon } from "@hugeicons/core-free-icons";
 
 // Helper to get element info for display
 function getElementInfo(element: HTMLElement, sectionType: string): string {
@@ -376,7 +378,11 @@ export default function EditorPage({
   if (page === undefined) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <HugeiconsIcon
+          icon={Loading03Icon}
+          className="w-8 h-8 text-muted-foreground animate-spin"
+          style={{ animationDuration: "0.5s" }}
+        />
       </div>
     );
   }
