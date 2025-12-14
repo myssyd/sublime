@@ -42,7 +42,7 @@ export function AppNav({ user, usage }: AppNavProps) {
   };
 
   return (
-    <header className="border-b">
+    <header className="border-b border-border/40">
       <div className="container mx-auto flex h-11 items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="text-base font-semibold">
