@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowUp01Icon, Loading01Icon, Cancel01Icon, Tick01Icon, ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
+import { ArrowUp01Icon, Loading03Icon, Cancel01Icon, Tick01Icon, ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
 
 type AnimationPhase = 'idle' | 'content-fading' | 'morphing' | 'loading' | 'preview';
 
@@ -182,8 +182,8 @@ export function CommentPopover({
     setIsSubmitting(true);
     try {
       await onSubmit(comment, model);
-      setComment("");
-      // Don't close - the popover will morph into loading then preview state
+      // Don't clear comment - keep it for potential rejection/resubmit
+      // Comment is cleared when popover closes (on accept or manual close)
     } catch (error) {
       console.error("Failed to submit comment:", error);
     } finally {
@@ -293,7 +293,7 @@ export function CommentPopover({
             disabled={!comment.trim() || isSubmitting}
           >
             {isSubmitting ? (
-              <HugeiconsIcon icon={Loading01Icon} className="w-4 h-4 animate-spin" />
+              <HugeiconsIcon icon={Loading03Icon} className="w-4 h-4 animate-spin" />
             ) : (
               <HugeiconsIcon icon={ArrowUp01Icon} className="w-4 h-4" />
             )}
@@ -362,7 +362,7 @@ export function CommentPopover({
               title="Accept changes"
             >
               {isAccepting ? (
-                <HugeiconsIcon icon={Loading01Icon} className="w-4 h-4 animate-spin" />
+                <HugeiconsIcon icon={Loading03Icon} className="w-4 h-4 animate-spin" />
               ) : (
                 <HugeiconsIcon icon={Tick01Icon} className="w-4 h-4" />
               )}

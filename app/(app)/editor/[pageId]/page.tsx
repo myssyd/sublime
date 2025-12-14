@@ -225,10 +225,10 @@ export default function EditorPage({
   }, [previewContent, updateSection, handleClosePopover]);
 
   const handleRejectChanges = useCallback(() => {
-    // Discard preview and close popover
+    // Discard preview and go back to prompt state (don't close popover)
     setPreviewContent(null);
-    handleClosePopover();
-  }, [handleClosePopover]);
+    // Animation will transition back to 'idle' showing the prompt with original comment
+  }, []);
 
   const page = useQuery(
     api.landingPages.get,

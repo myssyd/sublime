@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loading01Icon } from "@hugeicons/core-free-icons";
+import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 interface Message {
@@ -122,7 +122,7 @@ export default function NewPagePage() {
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <HugeiconsIcon
-                    icon={Loading01Icon}
+                    icon={Loading03Icon}
                     className="w-8 h-8 animate-spin mx-auto mb-2 text-muted-foreground"
                   />
                   <p className="text-muted-foreground">
@@ -152,7 +152,7 @@ export default function NewPagePage() {
                   <div className="flex justify-start">
                     <div className="bg-muted rounded-lg px-4 py-2">
                       <HugeiconsIcon
-                        icon={Loading01Icon}
+                        icon={Loading03Icon}
                         className="w-5 h-5 animate-spin text-muted-foreground"
                       />
                     </div>
@@ -183,7 +183,7 @@ export default function NewPagePage() {
               disabled={!message.trim() || isLoading || isInitializing}
             >
               {isLoading ? (
-                <HugeiconsIcon icon={Loading01Icon} className="w-4 h-4 animate-spin" />
+                <HugeiconsIcon icon={Loading03Icon} className="w-4 h-4 animate-spin" />
               ) : (
                 "Send"
               )}
