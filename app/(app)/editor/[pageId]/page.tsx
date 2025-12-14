@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState, useCallback, useEffect } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSession } from "@/lib/auth-client";
@@ -64,6 +64,12 @@ export default function EditorPage({
   const [selectedElementSectionId, setSelectedElementSectionId] = useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | undefined>(undefined);
+
+  // Processing state for AI comment handling
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // AI action for processing comments
+  const processComment = useAction(api.agents.actions.processComment);
 
   // Clear selection when tool changes
   useEffect(() => {
@@ -142,14 +148,44 @@ export default function EditorPage({
   }, [selectedElement]);
 
   const handleCommentSubmit = async (comment: string, model: string) => {
-    // TODO: Implement comment submission via Convex
-    console.log("Comment submitted:", {
-      comment,
-      model,
-      sectionId: selectedElementSectionId,
-      elementInfo: selectedElementInfo,
-    });
-    handleClosePopover();
+    if (!selectedElement || !selectedElementSectionId) return;
+
+    // Store the element for processing
+    const elementToProcess = selectedElement;
+    const sectionId = selectedElementSectionId;
+    const elementInfo = selectedElementInfo;
+
+    // Start processing - keep popover open, it will morph into loading indicator
+    setIsProcessing(true);
+
+    try {
+      const result = await processComment({
+        sectionId: sectionId as Id<"sections">,
+        comment,
+        elementInfo,
+        model,
+      });
+
+      // TODO: If updatedContent is returned, update the section in the database
+      // The SectionRenderer will automatically re-render with the new content
+      if (result.updatedContent) {
+        console.log("Updated content:", result.updatedContent);
+        // TODO: Call a mutation to update the section content
+      }
+    } catch (error) {
+      console.error("Failed to process comment:", error);
+    } finally {
+      // Clear processing state and close popover
+      setIsProcessing(false);
+      setIsPopoverOpen(false);
+      setClickPosition(undefined);
+
+      // Clear element highlight
+      elementToProcess.classList.remove("comment-selected-element");
+      setSelectedElement(null);
+      setSelectedElementInfo("");
+      setSelectedElementSectionId(null);
+    }
   };
 
   const page = useQuery(
@@ -284,7 +320,7 @@ export default function EditorPage({
               </div>
             )}
 
-            {/* Comment Popover */}
+            {/* Comment Popover - morphs into loading indicator when processing */}
             <CommentPopover
               isOpen={isPopoverOpen}
               onClose={handleClosePopover}
@@ -292,6 +328,7 @@ export default function EditorPage({
               targetElement={selectedElement}
               elementInfo={selectedElementInfo}
               clickPosition={clickPosition}
+              isProcessing={isProcessing}
             />
           </div>
         </div>
