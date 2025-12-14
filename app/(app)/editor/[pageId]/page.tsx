@@ -239,7 +239,7 @@ export default function EditorPage({
       }
     } catch (error) {
       console.error("Failed to process comment:", error);
-      handleClosePopover();
+      // Don't close popover - treat error as rejection and let user try again
     } finally {
       setIsProcessing(false);
     }
