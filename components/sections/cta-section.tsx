@@ -51,17 +51,19 @@ export function CTASection({ content, theme, className }: CTASectionProps) {
           </p>
         )}
 
-        <Button
-          size="lg"
-          className="h-12 px-8 text-base font-semibold"
-          style={{
-            backgroundColor: theme.backgroundColor,
-            color: theme.primaryColor,
-          }}
-          asChild
-        >
-          <a href={content.cta.url}>{content.cta.text}</a>
-        </Button>
+        {content.cta && (
+          <Button
+            size="lg"
+            className="h-12 px-8 text-base font-semibold"
+            style={{
+              backgroundColor: theme.backgroundColor,
+              color: theme.primaryColor,
+            }}
+            asChild
+          >
+            <a href={content.cta.url || "#"}>{content.cta.text || "Get Started"}</a>
+          </Button>
+        )}
       </div>
     </section>
   );

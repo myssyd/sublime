@@ -58,16 +58,18 @@ export function AboutSection({ content, theme, className }: AboutSectionProps) {
             />
           )}
 
-          <div
-            className="prose prose-lg max-w-none opacity-85 leading-relaxed"
-            style={{ fontFamily: theme.fontFamily }}
-          >
-            {content.content.split("\n\n").map((paragraph, index) => (
-              <p key={index} className="mb-4">
-                {paragraph}
-              </p>
-            ))}
-          </div>
+          {content.content && (
+            <div
+              className="prose prose-lg max-w-none opacity-85 leading-relaxed"
+              style={{ fontFamily: theme.fontFamily }}
+            >
+              {(content.content || "").split("\n\n").map((paragraph, index) => (
+                <p key={index} className="mb-4">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

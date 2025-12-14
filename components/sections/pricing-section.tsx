@@ -46,12 +46,12 @@ export function PricingSection({
         <div
           className={cn(
             "grid gap-8",
-            content.tiers.length === 1 && "max-w-md mx-auto",
-            content.tiers.length === 2 && "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto",
-            content.tiers.length >= 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+            (content.tiers || []).length === 1 && "max-w-md mx-auto",
+            (content.tiers || []).length === 2 && "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto",
+            (content.tiers || []).length >= 3 && "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
           )}
         >
-          {content.tiers.map((tier, index) => (
+          {(content.tiers || []).map((tier, index) => (
             <div
               key={index}
               className={cn(
@@ -102,7 +102,7 @@ export function PricingSection({
               </div>
 
               <ul className="space-y-3 mb-8 flex-1">
-                {tier.features.map((feature, featureIndex) => (
+                {(tier.features || []).map((feature, featureIndex) => (
                   <li key={featureIndex} className="flex items-start gap-3">
                     <HugeiconsIcon
                       icon={Tick01Icon}
@@ -114,27 +114,29 @@ export function PricingSection({
                 ))}
               </ul>
 
-              <Button
-                className={cn(
-                  "w-full h-12 font-semibold",
-                  tier.highlighted ? "" : "border"
-                )}
-                style={
-                  tier.highlighted
-                    ? {
-                        backgroundColor: theme.primaryColor,
-                        color: theme.backgroundColor,
-                      }
-                    : {
-                        backgroundColor: "transparent",
-                        borderColor: theme.primaryColor,
-                        color: theme.primaryColor,
-                      }
-                }
-                asChild
-              >
-                <a href={tier.cta.url}>{tier.cta.text}</a>
-              </Button>
+              {tier.cta && (
+                <Button
+                  className={cn(
+                    "w-full h-12 font-semibold",
+                    tier.highlighted ? "" : "border"
+                  )}
+                  style={
+                    tier.highlighted
+                      ? {
+                          backgroundColor: theme.primaryColor,
+                          color: theme.backgroundColor,
+                        }
+                      : {
+                          backgroundColor: "transparent",
+                          borderColor: theme.primaryColor,
+                          color: theme.primaryColor,
+                        }
+                  }
+                  asChild
+                >
+                  <a href={tier.cta.url || "#"}>{tier.cta.text || "Get Started"}</a>
+                </Button>
+              )}
             </div>
           ))}
         </div>

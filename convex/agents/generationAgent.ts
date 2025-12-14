@@ -113,7 +113,7 @@ const suggestSectionsTool = createTool({
 // The generation agent with custom context type
 export const generationAgent = new Agent<CustomCtx>(components.agent, {
   name: "generation",
-  // languageModel: openrouter("anthropic/claude-sonnet-4"),
+  // languageModel: openrouter("anthropic/claude-3.5-sonnet"),
   languageModel: openrouter("google/gemini-2.0-flash-exp:free"),
   textEmbeddingModel: openrouter.textEmbeddingModel("openai/text-embedding-3-small"),
   instructions: GENERATION_AGENT_PROMPT,

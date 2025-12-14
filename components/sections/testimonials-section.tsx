@@ -43,7 +43,7 @@ export function TestimonialsSection({
         )}
 
         <div className={layoutClasses[content.layout || "grid"]}>
-          {content.testimonials.map((testimonial, index) => {
+          {(content.testimonials || []).map((testimonial, index) => {
             if (content.layout === "featured" && index === 0) {
               return (
                 <div

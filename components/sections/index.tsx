@@ -1,6 +1,7 @@
 "use client";
 
 import { SectionType, Theme } from "@/lib/sections/definitions";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { HeroSection } from "./hero-section";
 import { FeaturesSection } from "./features-section";
 import { PricingSection } from "./pricing-section";
@@ -69,9 +70,13 @@ export function SectionRenderer({
   if (!Component) {
     console.warn(`Unknown section type: ${type}`);
     return (
-      <div className="p-8 text-center border-2 border-dashed border-red-300 rounded-lg">
-        <p className="text-red-500">Unknown section type: {type}</p>
-      </div>
+      <Empty className="border-red-300 p-8">
+        <EmptyHeader>
+          <EmptyTitle className="text-red-500">
+            Unknown section type: {type}
+          </EmptyTitle>
+        </EmptyHeader>
+      </Empty>
     );
   }
 

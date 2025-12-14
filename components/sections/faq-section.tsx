@@ -34,7 +34,7 @@ export function FAQSection({ content, theme, className }: FAQSectionProps) {
         </div>
 
         <div className="space-y-4">
-          {content.items.map((item, index) => (
+          {(content.items || []).map((item, index) => (
             <div
               key={index}
               className="border rounded-xl overflow-hidden"

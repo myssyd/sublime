@@ -88,7 +88,7 @@ export const create = mutation({
       createdAt: Date.now(),
     });
 
-    return mediaId;
+    return { mediaId, url };
   },
 });
 

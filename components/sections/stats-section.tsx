@@ -33,14 +33,14 @@ export function StatsSection({ content, theme, className }: StatsSectionProps) {
         <div
           className={cn(
             "grid gap-8 text-center",
-            content.stats.length <= 3
+            (content.stats || []).length <= 3
               ? "grid-cols-1 md:grid-cols-3"
-              : content.stats.length === 4
+              : (content.stats || []).length === 4
                 ? "grid-cols-2 md:grid-cols-4"
                 : "grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
           )}
         >
-          {content.stats.map((stat, index) => (
+          {(content.stats || []).map((stat, index) => (
             <div key={index} className="p-4">
               <div
                 className="text-4xl md:text-5xl font-bold mb-2"

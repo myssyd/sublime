@@ -4,13 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ModelSelector } from "@/components/model-selector";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowUp01Icon, Loading03Icon, Cancel01Icon, Tick01Icon, ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
 
@@ -32,13 +26,6 @@ interface CommentPopoverProps {
   onAcceptChanges?: () => void;
   onRejectChanges?: () => void;
 }
-
-const AI_MODELS = [
-  { value: "gemini", label: "Gemini" },
-  { value: "claude", label: "Claude" },
-  { value: "gpt-4", label: "GPT-4" },
-  { value: "gpt-4o", label: "GPT-4o" },
-];
 
 export function CommentPopover({
   isOpen,
@@ -272,18 +259,13 @@ export function CommentPopover({
         {/* Footer with model selector and submit */}
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-2">
-            <Select value={model} onValueChange={setModel} disabled={isSubmitting}>
-              <SelectTrigger className="w-[100px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="z-150">
-                {AI_MODELS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ModelSelector
+              value={model}
+              onValueChange={setModel}
+              disabled={isSubmitting}
+              size="sm"
+              triggerClassName="w-[140px]"
+            />
           </div>
 
           <Button

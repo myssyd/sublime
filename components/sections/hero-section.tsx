@@ -61,34 +61,36 @@ export function HeroSection({ content, theme, className }: HeroSectionProps) {
           {content.subheadline}
         </p>
 
-        <div className="flex flex-wrap gap-4 mt-4">
-          <Button
-            size="lg"
-            className="h-12 px-8 text-base font-semibold"
-            style={{
-              backgroundColor: theme.primaryColor,
-              color: theme.backgroundColor,
-            }}
-            asChild
-          >
-            <a href={content.cta.url}>{content.cta.text}</a>
-          </Button>
-
-          {content.secondaryCta && (
+        {content.cta && (
+          <div className="flex flex-wrap gap-4 mt-4">
             <Button
-              variant="outline"
               size="lg"
               className="h-12 px-8 text-base font-semibold"
               style={{
-                borderColor: theme.primaryColor,
-                color: theme.textColor,
+                backgroundColor: theme.primaryColor,
+                color: theme.backgroundColor,
               }}
               asChild
             >
-              <a href={content.secondaryCta.url}>{content.secondaryCta.text}</a>
+              <a href={content.cta.url || "#"}>{content.cta.text || "Get Started"}</a>
             </Button>
-          )}
-        </div>
+
+            {content.secondaryCta && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-12 px-8 text-base font-semibold"
+                style={{
+                  borderColor: theme.primaryColor,
+                  color: theme.textColor,
+                }}
+                asChild
+              >
+                <a href={content.secondaryCta.url || "#"}>{content.secondaryCta.text || "Learn More"}</a>
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

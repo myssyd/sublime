@@ -57,7 +57,7 @@ export function ServicesSection({
         </div>
 
         <div className={layoutClasses[content.layout || "grid"]}>
-          {content.services.map((service, index) => {
+          {(content.services || []).map((service, index) => {
             if (content.layout === "list") {
               return (
                 <div

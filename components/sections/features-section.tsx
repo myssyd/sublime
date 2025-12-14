@@ -59,7 +59,7 @@ export function FeaturesSection({
         )}
 
         <div className={layoutClasses[content.layout || "grid"]}>
-          {content.features.map((feature, index) => {
+          {(content.features || []).map((feature, index) => {
             if (content.layout === "alternating") {
               return (
                 <div
