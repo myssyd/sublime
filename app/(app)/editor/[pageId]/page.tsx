@@ -266,9 +266,9 @@ export default function EditorPage({
   const theme: Theme = page.theme;
 
   const viewportClasses = {
-    desktop: "w-full",
-    tablet: "w-[768px] mx-auto",
-    mobile: "w-[375px] mx-auto",
+    desktop: "w-full max-w-full mx-auto",
+    tablet: "w-full max-w-[768px] mx-auto",
+    mobile: "w-full max-w-[375px] mx-auto",
   };
 
   return (
