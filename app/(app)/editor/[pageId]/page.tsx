@@ -1,11 +1,10 @@
 "use client";
 
-import { use, useState, useCallback, useEffect } from "react";
+import { use, useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSession } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyHeader,
@@ -17,19 +16,31 @@ import { CommentPopover } from "@/components/comment-popover";
 import { Theme, SectionType } from "@/lib/sections/definitions";
 import { getSectionDisplayName } from "@/lib/sections/metadata";
 import {
-  Cursor01Icon,
-  Move01Icon,
-  CommentAdd02Icon,
-  Layers01Icon,
-  ArrowLeft01Icon,
-  ComputerIcon,
-  Tablet01Icon,
-  SmartPhone01Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import Link from "next/link";
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 
-type ViewportMode = "desktop" | "tablet" | "mobile";
+import {
+  BottomToolbar,
+  ViewportMode,
+  ToolType,
+} from "@/components/editor/bottom-toolbar";
+import { RightSidebar } from "@/components/editor/right-sidebar";
+import { ChatSidebar } from "@/components/editor/chat-sidebar";
+import { DraggableSection } from "@/components/editor/draggable-section";
 
 // Helper to get element info for display
 function getElementInfo(element: HTMLElement, sectionType: string): string {
@@ -50,13 +61,18 @@ export default function EditorPage({
 }) {
   const { pageId } = use(params);
   const { data: session } = useSession();
+
+  // Viewport and tool state
   const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
-  const [selectedTool, setSelectedTool] = useState<
-    "cursor" | "move" | "comment" | "layers"
-  >("cursor");
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
-    null
-  );
+  const [selectedTool, setSelectedTool] = useState<ToolType>("cursor");
+
+  // Sidebar states
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+
+  // Drag state
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Element-level selection state
   const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
@@ -67,21 +83,46 @@ export default function EditorPage({
 
   // Processing state for AI comment handling
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isChatProcessing, setIsChatProcessing] = useState(false);
 
   // Preview state for AI-generated changes
   const [previewContent, setPreviewContent] = useState<{
     sectionId: string;
-    oldContent: any;
-    newContent: any;
+    oldContent: unknown;
+    newContent: unknown;
   } | null>(null);
   const [isShowingNewContent, setIsShowingNewContent] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
 
+  // Local theme state for optimistic updates
+  const [localTheme, setLocalTheme] = useState<Theme | null>(null);
+  const themeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // AI action for processing comments
   const processComment = useAction(api.agents.actions.processComment);
 
-  // Mutation for updating section content
+  // Queries
+  const page = useQuery(
+    api.landingPages.get,
+    session ? { id: pageId as Id<"landingPages"> } : "skip"
+  );
+  const sections = useQuery(
+    api.sections.listByPage,
+    session ? { landingPageId: pageId as Id<"landingPages"> } : "skip"
+  );
+
+  // Mutations
   const updateSection = useMutation(api.sections.update);
+  const updatePage = useMutation(api.landingPages.update);
+  const reorderSections = useMutation(api.sections.reorder);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Clear selection when tool changes
   useEffect(() => {
@@ -96,7 +137,7 @@ export default function EditorPage({
     }
   }, [selectedTool, selectedElement]);
 
-  // Keyboard shortcuts for tool selection
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Don't trigger shortcuts when typing in an input or textarea
@@ -112,21 +153,26 @@ export default function EditorPage({
         case "v":
           setSelectedTool("cursor");
           break;
-        case "m":
-          setSelectedTool("move");
-          break;
         case "c":
           setSelectedTool("comment");
           break;
-        case "l":
-          setSelectedTool(selectedTool === "layers" ? "cursor" : "layers");
+        case "s":
+          setIsSidebarOpen((prev) => !prev);
+          break;
+        case "/":
+          event.preventDefault();
+          setIsChatOpen(true);
+          break;
+        case "escape":
+          setIsChatOpen(false);
+          setIsPopoverOpen(false);
           break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedTool]);
+  }, []);
 
   const handleElementClick = useCallback(
     (element: HTMLElement, sectionId: string, sectionType: string, event: React.MouseEvent) => {
@@ -166,10 +212,10 @@ export default function EditorPage({
     const elementInfo = selectedElementInfo;
 
     // Find the current section content
-    const currentSection = sections.find((s: any) => s._id === sectionId);
+    const currentSection = sections.find((s: { _id: string }) => s._id === sectionId);
     if (!currentSection) return;
 
-    // Start processing - keep popover open, it will morph into loading indicator
+    // Start processing
     setIsProcessing(true);
 
     try {
@@ -187,15 +233,56 @@ export default function EditorPage({
           oldContent: currentSection.content,
           newContent: result.updatedContent,
         });
-        setIsShowingNewContent(true); // Show new content by default
+        setIsShowingNewContent(true);
       }
     } catch (error) {
       console.error("Failed to process comment:", error);
-      // On error, close everything
       handleClosePopover();
     } finally {
-      // Stop processing - this will trigger transition to preview mode if previewContent is set
       setIsProcessing(false);
+    }
+  };
+
+  // Page chat action
+  const processPageChat = useAction(api.agents.actions.processPageChat);
+
+  // Chat submit handler
+  const handleChatSubmit = async (message: string, model: string) => {
+    if (!page || !sections) return;
+
+    setIsChatProcessing(true);
+
+    try {
+      const result = await processPageChat({
+        landingPageId: pageId as Id<"landingPages">,
+        message,
+        model,
+      });
+
+      // Apply updated sections if any
+      if (result.updatedSections) {
+        for (const update of result.updatedSections) {
+          await updateSection({
+            id: update.sectionId as Id<"sections">,
+            content: update.updatedContent,
+          });
+        }
+      }
+
+      // Apply updated theme if any
+      if (result.updatedTheme) {
+        await updatePage({
+          id: pageId as Id<"landingPages">,
+          theme: result.updatedTheme,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Failed to process chat:", error);
+      throw error;
+    } finally {
+      setIsChatProcessing(false);
     }
   };
 
@@ -209,7 +296,6 @@ export default function EditorPage({
 
     setIsAccepting(true);
     try {
-      // Save the new content to database
       await updateSection({
         id: previewContent.sectionId as Id<"sections">,
         content: previewContent.newContent,
@@ -218,30 +304,78 @@ export default function EditorPage({
       console.error("Failed to save changes:", error);
     } finally {
       setIsAccepting(false);
-      // Clear preview and close popover
       setPreviewContent(null);
       handleClosePopover();
     }
   }, [previewContent, updateSection, handleClosePopover]);
 
   const handleRejectChanges = useCallback(() => {
-    // Discard preview and go back to prompt state (don't close popover)
     setPreviewContent(null);
-    // Animation will transition back to 'idle' showing the prompt with original comment
   }, []);
 
-  const page = useQuery(
-    api.landingPages.get,
-    session ? { id: pageId as Id<"landingPages"> } : "skip"
+  // Sync local theme from server when page loads or server theme changes
+  useEffect(() => {
+    if (page?.theme && !localTheme) {
+      setLocalTheme(page.theme);
+    }
+  }, [page?.theme, localTheme]);
+
+  // Theme change handler with optimistic updates
+  const handleThemeChange = useCallback(
+    (updates: Partial<Theme>) => {
+      const currentTheme = localTheme || page?.theme;
+      if (!currentTheme) return;
+
+      // Update local state immediately (optimistic)
+      const newTheme = { ...currentTheme, ...updates };
+      setLocalTheme(newTheme);
+
+      // Debounce the server update
+      if (themeDebounceRef.current) {
+        clearTimeout(themeDebounceRef.current);
+      }
+
+      themeDebounceRef.current = setTimeout(() => {
+        updatePage({
+          id: pageId as Id<"landingPages">,
+          theme: newTheme,
+        });
+      }, 300); // 300ms debounce
+    },
+    [localTheme, page?.theme, pageId, updatePage]
   );
-  const sections = useQuery(
-    api.sections.listByPage,
-    session ? { landingPageId: pageId as Id<"landingPages"> } : "skip"
-  );
+
+  // Drag handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || active.id === over.id || !sections) return;
+
+    const oldIndex = sections.findIndex((s: { _id: string }) => s._id === active.id);
+    const newIndex = sections.findIndex((s: { _id: string }) => s._id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newOrder = arrayMove(
+        sections.map((s: { _id: string }) => s._id),
+        oldIndex,
+        newIndex
+      );
+
+      await reorderSections({
+        landingPageId: pageId as Id<"landingPages">,
+        sectionIds: newOrder as Id<"sections">[],
+      });
+    }
+  };
 
   if (page === undefined) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+      <div className="flex h-screen items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
@@ -249,7 +383,7 @@ export default function EditorPage({
 
   if (page === null) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+      <div className="flex h-screen items-center justify-center">
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Page not found</EmptyTitle>
@@ -263,7 +397,8 @@ export default function EditorPage({
     );
   }
 
-  const theme: Theme = page.theme;
+  // Use local theme for instant updates, fall back to server theme
+  const theme: Theme = localTheme || page.theme;
 
   const viewportClasses = {
     desktop: "w-full max-w-full mx-auto",
@@ -271,54 +406,13 @@ export default function EditorPage({
     mobile: "w-full max-w-[375px] mx-auto",
   };
 
+  const sectionIds = sections?.map((s: { _id: string }) => s._id) || [];
+  const activeDragSection = activeId
+    ? sections?.find((s: { _id: string }) => s._id === activeId)
+    : null;
+
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col">
-      {/* Top toolbar */}
-      <div className="flex items-center justify-between border-b px-4 py-2 bg-background">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="w-5 h-5" />
-            <span className="text-sm">Back</span>
-          </Link>
-          <div className="h-4 w-px bg-border" />
-          <h1 className="font-medium">{page.name}</h1>
-        </div>
-
-        {/* Viewport switcher */}
-        <div className="flex items-center gap-1 rounded-lg border p-1">
-          <Button
-            variant={viewportMode === "desktop" ? "secondary" : "ghost"}
-            size="icon-sm"
-            onClick={() => setViewportMode("desktop")}
-          >
-            <HugeiconsIcon icon={ComputerIcon} className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={viewportMode === "tablet" ? "secondary" : "ghost"}
-            size="icon-sm"
-            onClick={() => setViewportMode("tablet")}
-          >
-            <HugeiconsIcon icon={Tablet01Icon} className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={viewportMode === "mobile" ? "secondary" : "ghost"}
-            size="icon-sm"
-            onClick={() => setViewportMode("mobile")}
-          >
-            <HugeiconsIcon icon={SmartPhone01Icon} className="w-4 h-4" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
-            {page.status}
-          </span>
-        </div>
-      </div>
-
+    <div className="flex h-screen flex-col">
       <div className="flex flex-1 overflow-hidden">
         {/* Preview pane */}
         <div className="flex-1 overflow-auto bg-muted/30 p-4">
@@ -345,32 +439,73 @@ export default function EditorPage({
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div>
-                {sections.map((section: any) => {
-                  // Use preview content if this section is being previewed
-                  const isPreviewingThisSection = previewContent !== null && previewContent.sectionId === section._id;
-                  const displayContent = isPreviewingThisSection
-                    ? (isShowingNewContent ? previewContent.newContent : previewContent.oldContent)
-                    : section.content;
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sectionIds}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div>
+                    {sections.map((section: { _id: string; type: string; content: unknown }) => {
+                      // Use preview content if this section is being previewed
+                      const isPreviewingThisSection =
+                        previewContent !== null &&
+                        previewContent.sectionId === section._id;
+                      const displayContent = isPreviewingThisSection
+                        ? isShowingNewContent
+                          ? previewContent.newContent
+                          : previewContent.oldContent
+                        : section.content;
 
-                  return (
-                    <SectionRenderer
-                      key={section._id}
-                      type={section.type}
-                      content={displayContent}
-                      theme={theme}
-                      isCommentMode={selectedTool === "comment"}
-                      selectedElement={selectedElement}
-                      onElementClick={(element, event) =>
-                        handleElementClick(element, section._id, section.type, event)
-                      }
-                    />
-                  );
-                })}
-              </div>
+                      return (
+                        <DraggableSection
+                          key={section._id}
+                          id={section._id}
+                          isSelected={selectedSectionId === section._id}
+                        >
+                          <SectionRenderer
+                            type={section.type}
+                            content={displayContent}
+                            theme={theme}
+                            isCommentMode={selectedTool === "comment"}
+                            selectedElement={selectedElement}
+                            onElementClick={(element, event) =>
+                              handleElementClick(
+                                element,
+                                section._id,
+                                section.type,
+                                event
+                              )
+                            }
+                          />
+                        </DraggableSection>
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+
+                <DragOverlay>
+                  {activeDragSection ? (
+                    <div className="opacity-80 shadow-2xl rounded-lg overflow-hidden">
+                      <SectionRenderer
+                        type={activeDragSection.type}
+                        content={activeDragSection.content}
+                        theme={theme}
+                        isCommentMode={false}
+                        selectedElement={null}
+                        onElementClick={() => {}}
+                      />
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             )}
 
-            {/* Comment Popover - morphs into loading indicator when processing */}
+            {/* Comment Popover */}
             <CommentPopover
               isOpen={isPopoverOpen}
               onClose={handleClosePopover}
@@ -389,78 +524,37 @@ export default function EditorPage({
           </div>
         </div>
 
-        {/* Layers panel (right sidebar) */}
-        {selectedTool === "layers" && sections && sections.length > 0 && (
-          <div className="w-64 border-l bg-background overflow-y-auto">
-            <div className="p-4 border-b">
-              <h2 className="font-medium">Layers</h2>
-            </div>
-            <div className="p-2">
-              {sections.map((section: any, index: number) => (
-                <button
-                  key={section._id}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                    selectedSectionId === section._id
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
-                  }`}
-                  onClick={() => setSelectedSectionId(section._id)}
-                >
-                  <span className="text-xs text-muted-foreground mr-2">
-                    {index + 1}
-                  </span>
-                  {getSectionDisplayName(section.type)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Right Sidebar */}
+        <RightSidebar
+          isOpen={isSidebarOpen}
+          sections={sections || []}
+          selectedSectionId={selectedSectionId}
+          onSectionSelect={setSelectedSectionId}
+          theme={theme}
+          onThemeChange={handleThemeChange}
+        />
       </div>
 
-      {/* Editor toolbar (bottom) */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-        <div className="flex items-center gap-1 rounded-full bg-background px-2 py-1.5 shadow-lg ring-1 ring-border">
-          <Button
-            variant={selectedTool === "cursor" ? "secondary" : "ghost"}
-            size="icon-sm"
-            className="rounded-full"
-            onClick={() => setSelectedTool("cursor")}
-            title="Select (V)"
-          >
-            <HugeiconsIcon icon={Cursor01Icon} className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={selectedTool === "move" ? "secondary" : "ghost"}
-            size="icon-sm"
-            className="rounded-full"
-            onClick={() => setSelectedTool("move")}
-            title="Move (M)"
-          >
-            <HugeiconsIcon icon={Move01Icon} className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={selectedTool === "comment" ? "secondary" : "ghost"}
-            size="icon-sm"
-            className="rounded-full"
-            onClick={() => setSelectedTool("comment")}
-            title="Comment (C)"
-          >
-            <HugeiconsIcon icon={CommentAdd02Icon} className="w-4 h-4" />
-          </Button>
-          <div className="w-px h-6 bg-border mx-1" />
-          <Button
-            variant={selectedTool === "layers" ? "secondary" : "ghost"}
-            size="icon-sm"
-            className="rounded-full"
-            onClick={() =>
-              setSelectedTool(selectedTool === "layers" ? "cursor" : "layers")
-            }
-            title="Layers (L)"
-          >
-            <HugeiconsIcon icon={Layers01Icon} className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
+      {/* Chat Sidebar */}
+      <ChatSidebar
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        onSubmit={handleChatSubmit}
+        isProcessing={isChatProcessing}
+      />
+
+      {/* Bottom Toolbar */}
+      <BottomToolbar
+        pageName={page.name}
+        viewportMode={viewportMode}
+        onViewportChange={setViewportMode}
+        selectedTool={selectedTool}
+        onToolChange={setSelectedTool}
+        isChatOpen={isChatOpen}
+        onChatToggle={() => setIsChatOpen((prev) => !prev)}
+        isSidebarOpen={isSidebarOpen}
+        onSidebarToggle={() => setIsSidebarOpen((prev) => !prev)}
+      />
     </div>
   );
 }
