@@ -12,6 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useTheme } from "@/components/theme-provider";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Sun03Icon, Moon02Icon } from "@hugeicons/core-free-icons";
 
 interface AppNavProps {
   user: {
@@ -31,6 +34,7 @@ interface AppNavProps {
 
 export function AppNav({ user, usage }: AppNavProps) {
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
@@ -101,6 +105,14 @@ export function AppNav({ user, usage }: AppNavProps) {
                   <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuItem onClick={toggleTheme}>
+                <HugeiconsIcon
+                  icon={theme === "dark" ? Sun03Icon : Moon02Icon}
+                  className="size-4"
+                />
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+                <span className="ml-auto text-xs text-muted-foreground">D</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
