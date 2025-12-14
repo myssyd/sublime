@@ -413,11 +413,12 @@ export default function EditorPage({
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="flex flex-1 overflow-hidden">
-        {/* Preview pane */}
-        <div className="flex-1 overflow-auto bg-muted/30 p-4">
+      {/* Preview pane */}
+      <div className="flex-1 overflow-auto bg-muted/30 py-4 pl-4 pr-2">
+        <div className="flex gap-0 h-full">
+          {/* Page preview */}
           <div
-            className={`${viewportClasses[viewportMode]} transition-all duration-300 rounded-lg overflow-hidden shadow-xl`}
+            className={`${viewportClasses[viewportMode]} transition-all duration-300 rounded-lg overflow-y-auto shadow-xl`}
             style={{
               backgroundColor: theme.backgroundColor,
               color: theme.textColor,
@@ -522,17 +523,17 @@ export default function EditorPage({
               onRejectChanges={handleRejectChanges}
             />
           </div>
-        </div>
 
-        {/* Right Sidebar */}
-        <RightSidebar
-          isOpen={isSidebarOpen}
-          sections={sections || []}
-          selectedSectionId={selectedSectionId}
-          onSectionSelect={setSelectedSectionId}
-          theme={theme}
-          onThemeChange={handleThemeChange}
-        />
+          {/* Right Sidebar */}
+          <RightSidebar
+            isOpen={isSidebarOpen}
+            sections={sections || []}
+            selectedSectionId={selectedSectionId}
+            onSectionSelect={setSelectedSectionId}
+            theme={theme}
+            onThemeChange={handleThemeChange}
+          />
+        </div>
       </div>
 
       {/* Chat Sidebar */}

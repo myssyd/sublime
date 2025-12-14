@@ -32,8 +32,8 @@ export function RightSidebar({
   return (
     <div
       className={cn(
-        "border-l bg-background overflow-hidden transition-all duration-200",
-        isOpen ? "w-72" : "w-0"
+        "bg-background overflow-hidden transition-all duration-200 rounded-lg shadow-xl shrink-0",
+        isOpen ? "w-72 ml-2" : "w-0 ml-0"
       )}
     >
       <div className="w-72 h-full overflow-y-auto">
