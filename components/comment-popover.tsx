@@ -220,7 +220,7 @@ export function CommentPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className={`fixed z-[100] bg-popover shadow-lg ring-1 ring-foreground/10 overflow-hidden ${
+      className={`fixed z-100 bg-popover shadow-lg ring-1 ring-foreground/10 overflow-hidden ${
         animationPhase === 'idle' ? 'animate-in fade-in-0 zoom-in-95' : ''
       }`}
       style={{
@@ -276,7 +276,7 @@ export function CommentPopover({
               <SelectTrigger className="w-[100px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="z-[150]">
+              <SelectContent className="z-150">
                 {AI_MODELS.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
