@@ -75,6 +75,7 @@ export default function EditorPage({
     newContent: any;
   } | null>(null);
   const [isShowingNewContent, setIsShowingNewContent] = useState(true);
+  const [isAccepting, setIsAccepting] = useState(false);
 
   // AI action for processing comments
   const processComment = useAction(api.agents.actions.processComment);
@@ -206,6 +207,7 @@ export default function EditorPage({
   const handleAcceptChanges = useCallback(async () => {
     if (!previewContent) return;
 
+    setIsAccepting(true);
     try {
       // Save the new content to database
       await updateSection({
@@ -215,6 +217,7 @@ export default function EditorPage({
     } catch (error) {
       console.error("Failed to save changes:", error);
     } finally {
+      setIsAccepting(false);
       // Clear preview and close popover
       setPreviewContent(null);
       handleClosePopover();
@@ -377,6 +380,7 @@ export default function EditorPage({
               clickPosition={clickPosition}
               isProcessing={isProcessing}
               previewMode={previewContent !== null}
+              isAccepting={isAccepting}
               isShowingNewContent={isShowingNewContent}
               onTogglePreview={handleTogglePreview}
               onAcceptChanges={handleAcceptChanges}

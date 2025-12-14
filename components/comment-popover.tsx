@@ -26,6 +26,7 @@ interface CommentPopoverProps {
   isProcessing?: boolean;
   // Preview mode props
   previewMode?: boolean;
+  isAccepting?: boolean;
   isShowingNewContent?: boolean;
   onTogglePreview?: () => void;
   onAcceptChanges?: () => void;
@@ -48,6 +49,7 @@ export function CommentPopover({
   clickPosition,
   isProcessing = false,
   previewMode = false,
+  isAccepting = false,
   isShowingNewContent = true,
   onTogglePreview,
   onAcceptChanges,
@@ -210,7 +212,7 @@ export function CommentPopover({
 
   // Calculate pill width based on state
   const getPillWidth = () => {
-    if (isInPreviewMode) return '100px'; // Wider for 3 buttons
+    if (isInPreviewMode) return '116px'; // Wider for 3 bigger buttons
     if (isInLoadingMode) return '56px';
     return '384px';
   };
@@ -225,7 +227,7 @@ export function CommentPopover({
         top: position.top,
         left: position.left,
         width: getPillWidth(),
-        height: isInPillMode ? '32px' : 'auto',
+        height: isInPillMode ? '36px' : 'auto',
         borderRadius: isInPillMode ? '9999px' : '8px',
         padding: isInPillMode ? '0' : '12px',
         transition: 'width 200ms ease-out, height 200ms ease-out, border-radius 200ms ease-out, padding 200ms ease-out',
@@ -331,32 +333,39 @@ export function CommentPopover({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 rounded-full"
+              className="h-7 w-7 rounded-full"
               onClick={onTogglePreview}
+              disabled={isAccepting}
               title={isShowingNewContent ? "Show original" : "Show changes"}
             >
               <HugeiconsIcon
                 icon={isShowingNewContent ? ViewIcon : ViewOffIcon}
-                className="w-3.5 h-3.5"
+                className="w-4 h-4"
               />
             </Button>
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 rounded-full text-destructive hover:text-destructive"
+              className="h-7 w-7 rounded-full"
               onClick={onRejectChanges}
+              disabled={isAccepting}
               title="Reject changes"
             >
-              <HugeiconsIcon icon={Cancel01Icon} className="w-3.5 h-3.5" />
+              <HugeiconsIcon icon={Cancel01Icon} className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-6 w-6 rounded-full text-green-600 hover:text-green-600"
+              className="h-7 w-7 rounded-full"
               onClick={onAcceptChanges}
+              disabled={isAccepting}
               title="Accept changes"
             >
-              <HugeiconsIcon icon={Tick01Icon} className="w-3.5 h-3.5" />
+              {isAccepting ? (
+                <HugeiconsIcon icon={Loading01Icon} className="w-4 h-4 animate-spin" />
+              ) : (
+                <HugeiconsIcon icon={Tick01Icon} className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </div>
