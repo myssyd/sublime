@@ -14,7 +14,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/theme-provider";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Sun03Icon, Moon02Icon } from "@hugeicons/core-free-icons";
+import { Sun03Icon, Moon02Icon, Settings02Icon, ComputerIcon } from "@hugeicons/core-free-icons";
 
 interface AppNavProps {
   user: {
@@ -107,12 +107,19 @@ export function AppNav({ user, usage }: AppNavProps) {
               )}
               <DropdownMenuItem onClick={toggleTheme}>
                 <HugeiconsIcon
-                  icon={theme === "dark" ? Sun03Icon : Moon02Icon}
+                  icon={theme === "dark" ? Sun03Icon : theme === "light" ? Moon02Icon : ComputerIcon}
                   className="size-4"
                 />
-                {theme === "dark" ? "Light mode" : "Dark mode"}
+                {theme === "light" ? "Dark mode" : theme === "dark" ? "System" : "Light mode"}
                 <span className="ml-auto text-xs text-muted-foreground">D</span>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <HugeiconsIcon icon={Settings02Icon} className="size-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

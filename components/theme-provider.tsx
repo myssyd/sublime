@@ -9,10 +9,12 @@ import {
   ReactNode,
 } from "react";
 
-type Theme = "light" | "dark";
+type Theme = "light" | "dark" | "system";
+type ResolvedTheme = "light" | "dark";
 
 interface ThemeContextType {
   theme: Theme;
+  resolvedTheme: ResolvedTheme;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
 }
@@ -27,6 +29,13 @@ export function useTheme() {
   return context;
 }
 
+function getSystemTheme(): ResolvedTheme {
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
 interface ThemeProviderProps {
   children: ReactNode;
   defaultTheme?: Theme;
@@ -34,24 +43,31 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  defaultTheme = "light",
+  defaultTheme = "system",
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
   const [mounted, setMounted] = useState(false);
 
+  // Initialize from localStorage
   useEffect(() => {
     setMounted(true);
     const stored = localStorage.getItem("theme") as Theme | null;
-    if (stored) {
+    if (stored && ["light", "dark", "system"].includes(stored)) {
       setThemeState(stored);
     }
   }, []);
 
+  // Resolve and apply theme
   useEffect(() => {
     if (!mounted) return;
 
+    const effectiveTheme: ResolvedTheme =
+      theme === "system" ? getSystemTheme() : theme;
+    setResolvedTheme(effectiveTheme);
+
     const root = document.body;
-    if (theme === "dark") {
+    if (effectiveTheme === "dark") {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
@@ -59,8 +75,33 @@ export function ThemeProvider({
     localStorage.setItem("theme", theme);
   }, [theme, mounted]);
 
+  // Listen for system theme changes when in "system" mode
+  useEffect(() => {
+    if (!mounted || theme !== "system") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      const newResolvedTheme = e.matches ? "dark" : "light";
+      setResolvedTheme(newResolvedTheme);
+
+      const root = document.body;
+      if (newResolvedTheme === "dark") {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+    };
+
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, [theme, mounted]);
+
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
+    setThemeState((prev) => {
+      if (prev === "light") return "dark";
+      if (prev === "dark") return "system";
+      return "light";
+    });
   }, []);
 
   const setTheme = useCallback((newTheme: Theme) => {
@@ -90,7 +131,7 @@ export function ThemeProvider({
   }, [toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, resolvedTheme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

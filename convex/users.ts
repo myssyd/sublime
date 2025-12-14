@@ -135,3 +135,96 @@ export const updateProfile = mutation({
     return { success: true };
   },
 });
+
+// Update user avatar from storage
+export const updateAvatar = mutation({
+  args: {
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await getAuthUser(ctx);
+
+    // Get the URL for the uploaded file
+    const url = await ctx.storage.getUrl(args.storageId);
+    if (!url) {
+      throw new Error("Failed to get storage URL");
+    }
+
+    await ctx.db.patch(user._id, { image: url });
+
+    return { success: true, url };
+  },
+});
+
+// Delete user account and all associated data
+export const deleteAccount = mutation({
+  args: {},
+  handler: async (ctx: any) => {
+    const user = await getAuthUser(ctx);
+
+    // Delete all user's landing pages and their sections
+    const pages = await ctx.db
+      .query("landingPages")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    for (const page of pages) {
+      // Delete sections for each page
+      const sections = await ctx.db
+        .query("sections")
+        .withIndex("by_page", (q: any) => q.eq("landingPageId", page._id))
+        .collect();
+
+      for (const section of sections) {
+        // Delete comments for each section
+        const comments = await ctx.db
+          .query("comments")
+          .withIndex("by_section", (q: any) => q.eq("sectionId", section._id))
+          .collect();
+
+        for (const comment of comments) {
+          await ctx.db.delete(comment._id);
+        }
+
+        await ctx.db.delete(section._id);
+      }
+
+      await ctx.db.delete(page._id);
+    }
+
+    // Delete all user's media from storage and database
+    const media = await ctx.db
+      .query("media")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    for (const item of media) {
+      await ctx.storage.delete(item.storageId);
+      await ctx.db.delete(item._id);
+    }
+
+    // Delete user's threads and messages
+    const threads = await ctx.db
+      .query("threads")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect();
+
+    for (const thread of threads) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_thread", (q: any) => q.eq("threadId", thread._id))
+        .collect();
+
+      for (const msg of messages) {
+        await ctx.db.delete(msg._id);
+      }
+
+      await ctx.db.delete(thread._id);
+    }
+
+    // Delete the user record
+    await ctx.db.delete(user._id);
+
+    return { success: true };
+  },
+});
