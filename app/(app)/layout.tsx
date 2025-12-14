@@ -57,12 +57,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col">
       {/* Header */}
       <header className="border-b">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="text-xl font-semibold">
+        <div className="container mx-auto flex h-11 items-center justify-between px-4">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="text-base font-semibold">
               Sublime
             </Link>
-            <nav className="hidden items-center gap-4 sm:flex">
+            <nav className="hidden items-center gap-3 sm:flex">
               <Link
                 href="/dashboard"
                 className="text-sm text-muted-foreground hover:text-foreground"
@@ -78,26 +78,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </nav>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Usage indicator */}
-            {usage && (
-              <div className="hidden text-xs text-muted-foreground sm:block">
-                {usage.usage.pagesCreated}/{usage.limits.maxPages === Infinity ? "∞" : usage.limits.maxPages} pages
-              </div>
-            )}
-
-            {/* New page button */}
-            <Link href="/new">
-              <Button size="sm">New Page</Button>
-            </Link>
-
+          <div className="flex items-center gap-2">
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Avatar>
+                <Button variant="ghost" size="icon" className="size-8 rounded-full">
+                  <Avatar className="size-7">
                     <AvatarImage src={session?.user?.image ?? undefined} alt={session?.user?.name ?? "User"} />
-                    <AvatarFallback>
+                    <AvatarFallback className="text-xs">
                       {session?.user?.name?.[0]?.toUpperCase() ||
                         session?.user?.email?.[0]?.toUpperCase() ||
                         "U"}
@@ -105,7 +93,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-52">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">
                     {session?.user?.name || "User"}
