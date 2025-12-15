@@ -42,7 +42,11 @@ import { RightSidebar } from "@/components/editor/right-sidebar";
 import { ChatSidebar } from "@/components/editor/chat-sidebar";
 import { DraggableSection } from "@/components/editor/draggable-section";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Loading03Icon, Cursor01Icon, CommentAdd02Icon } from "@hugeicons/core-free-icons";
+import {
+  Loading03Icon,
+  Cursor01Icon,
+  CommentAdd02Icon,
+} from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
 
 // Helper to get element info for display
@@ -72,17 +76,25 @@ export default function EditorPage({
   // Sidebar states
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+    null
+  );
 
   // Drag state
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Element-level selection state
-  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
+  const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(
+    null
+  );
   const [selectedElementInfo, setSelectedElementInfo] = useState<string>("");
-  const [selectedElementSectionId, setSelectedElementSectionId] = useState<string | null>(null);
+  const [selectedElementSectionId, setSelectedElementSectionId] = useState<
+    string | null
+  >(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | undefined>(undefined);
+  const [clickPosition, setClickPosition] = useState<
+    { x: number; y: number } | undefined
+  >(undefined);
 
   // Processing state for AI comment handling
   const [isProcessing, setIsProcessing] = useState(false);
@@ -141,42 +153,45 @@ export default function EditorPage({
   }, [selectedTool, selectedElement]);
 
   // Tool change handler with toast notification
-  const handleToolChange = useCallback((tool: ToolType) => {
-    if (tool === selectedTool) return;
+  const handleToolChange = useCallback(
+    (tool: ToolType) => {
+      if (tool === selectedTool) return;
 
-    setSelectedTool(tool);
+      setSelectedTool(tool);
 
-    const toolConfig = {
-      cursor: { name: "Select", icon: Cursor01Icon, shortcut: "V" },
-      comment: { name: "Comment", icon: CommentAdd02Icon, shortcut: "C" },
-    };
+      const toolConfig = {
+        cursor: { name: "Select", icon: Cursor01Icon, shortcut: "V" },
+        comment: { name: "Comment", icon: CommentAdd02Icon, shortcut: "C" },
+      };
 
-    const config = toolConfig[tool];
-    toast(
-      <div className="flex items-center gap-2">
-        <span>{config.name}</span>
-        <kbd className="px-1.5 py-0.5 text-[10px] font-medium bg-muted rounded border border-border">
-          {config.shortcut}
-        </kbd>
-      </div>,
-      {
-        id: "tool-switch",
-        icon: <HugeiconsIcon icon={config.icon} className="w-3.5 h-3.5" />,
-        position: "bottom-center",
-        duration: 800,
-        style: {
-          marginBottom: "56px",
-          padding: "8px 12px",
-          fontSize: "13px",
-          minHeight: "unset",
-          width: "auto",
-          maxWidth: "fit-content",
-          left: "50%",
-          transform: "translateX(-50%)",
-        },
-      }
-    );
-  }, [selectedTool]);
+      const config = toolConfig[tool];
+      toast(
+        <div className="flex items-center gap-2">
+          <span>{config.name}</span>
+          <kbd className="px-1.5 py-0.5 text-[10px] font-medium bg-muted rounded border border-border">
+            {config.shortcut}
+          </kbd>
+        </div>,
+        {
+          id: "tool-switch",
+          icon: <HugeiconsIcon icon={config.icon} className="w-3.5 h-3.5" />,
+          position: "bottom-center",
+          duration: 800,
+          style: {
+            marginBottom: "56px",
+            padding: "8px 12px",
+            fontSize: "13px",
+            minHeight: "unset",
+            width: "auto",
+            maxWidth: "fit-content",
+            left: "50%",
+            transform: "translateX(-50%)",
+          },
+        }
+      );
+    },
+    [selectedTool]
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -216,7 +231,12 @@ export default function EditorPage({
   }, [handleToolChange]);
 
   const handleElementClick = useCallback(
-    (element: HTMLElement, sectionId: string, sectionType: string, event: React.MouseEvent) => {
+    (
+      element: HTMLElement,
+      sectionId: string,
+      sectionType: string,
+      event: React.MouseEvent
+    ) => {
       // Remove highlight from previous element
       if (selectedElement) {
         selectedElement.classList.remove("comment-selected-element");
@@ -258,7 +278,9 @@ export default function EditorPage({
       }
 
       if (Array.isArray(content)) {
-        return content.map((item) => replaceTextInContent(item, oldText, newText));
+        return content.map((item) =>
+          replaceTextInContent(item, oldText, newText)
+        );
       }
 
       if (typeof content === "object" && content !== null) {
@@ -278,11 +300,17 @@ export default function EditorPage({
     async (sectionId: string, oldText: string, newText: string) => {
       if (!sections) return;
 
-      const section = sections.find((s: { _id: string }) => s._id === sectionId);
+      const section = sections.find(
+        (s: { _id: string }) => s._id === sectionId
+      );
       if (!section) return;
 
       // Replace the old text with new text in the section content
-      const updatedContent = replaceTextInContent(section.content, oldText, newText);
+      const updatedContent = replaceTextInContent(
+        section.content,
+        oldText,
+        newText
+      );
 
       // Update the section
       await updateSection({
@@ -300,7 +328,9 @@ export default function EditorPage({
     const elementInfo = selectedElementInfo;
 
     // Find the current section content
-    const currentSection = sections.find((s: { _id: string }) => s._id === sectionId);
+    const currentSection = sections.find(
+      (s: { _id: string }) => s._id === sectionId
+    );
     if (!currentSection) return;
 
     // Start processing
@@ -444,8 +474,12 @@ export default function EditorPage({
 
     if (!over || active.id === over.id || !sections) return;
 
-    const oldIndex = sections.findIndex((s: { _id: string }) => s._id === active.id);
-    const newIndex = sections.findIndex((s: { _id: string }) => s._id === over.id);
+    const oldIndex = sections.findIndex(
+      (s: { _id: string }) => s._id === active.id
+    );
+    const newIndex = sections.findIndex(
+      (s: { _id: string }) => s._id === over.id
+    );
 
     if (oldIndex !== -1 && newIndex !== -1) {
       const newOrder = arrayMove(
@@ -506,7 +540,7 @@ export default function EditorPage({
   return (
     <div className="flex h-screen flex-col">
       {/* Preview pane */}
-      <div className="flex-1 overflow-auto bg-muted/30 py-4 pl-4 pr-2">
+      <div className="flex-1 overflow-auto bg-muted/30 py-4 px-2">
         <div className="flex gap-0 h-full">
           {/* Page preview */}
           <div
@@ -543,44 +577,50 @@ export default function EditorPage({
                   strategy={verticalListSortingStrategy}
                 >
                   <div>
-                    {sections.map((section: { _id: string; type: string; content: unknown }) => {
-                      // Use preview content if this section is being previewed
-                      const isPreviewingThisSection =
-                        previewContent !== null &&
-                        previewContent.sectionId === section._id;
-                      const displayContent = isPreviewingThisSection
-                        ? isShowingNewContent
-                          ? previewContent.newContent
-                          : previewContent.oldContent
-                        : section.content;
+                    {sections.map(
+                      (section: {
+                        _id: string;
+                        type: string;
+                        content: unknown;
+                      }) => {
+                        // Use preview content if this section is being previewed
+                        const isPreviewingThisSection =
+                          previewContent !== null &&
+                          previewContent.sectionId === section._id;
+                        const displayContent = isPreviewingThisSection
+                          ? isShowingNewContent
+                            ? previewContent.newContent
+                            : previewContent.oldContent
+                          : section.content;
 
-                      return (
-                        <DraggableSection
-                          key={section._id}
-                          id={section._id}
-                          isSelected={selectedSectionId === section._id}
-                        >
-                          <SectionRenderer
-                            type={section.type}
-                            content={displayContent}
-                            theme={theme}
-                            isCommentMode={selectedTool === "comment"}
-                            isSelectMode={selectedTool === "cursor"}
-                            onElementClick={(element, event) =>
-                              handleElementClick(
-                                element,
-                                section._id,
-                                section.type,
-                                event
-                              )
-                            }
-                            onTextEdit={(oldText, newText) =>
-                              handleTextEdit(section._id, oldText, newText)
-                            }
-                          />
-                        </DraggableSection>
-                      );
-                    })}
+                        return (
+                          <DraggableSection
+                            key={section._id}
+                            id={section._id}
+                            isSelected={selectedSectionId === section._id}
+                          >
+                            <SectionRenderer
+                              type={section.type}
+                              content={displayContent}
+                              theme={theme}
+                              isCommentMode={selectedTool === "comment"}
+                              isSelectMode={selectedTool === "cursor"}
+                              onElementClick={(element, event) =>
+                                handleElementClick(
+                                  element,
+                                  section._id,
+                                  section.type,
+                                  event
+                                )
+                              }
+                              onTextEdit={(oldText, newText) =>
+                                handleTextEdit(section._id, oldText, newText)
+                              }
+                            />
+                          </DraggableSection>
+                        );
+                      }
+                    )}
                   </div>
                 </SortableContext>
 
