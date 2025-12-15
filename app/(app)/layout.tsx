@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ReactNode } from "react";
 import { isAuthenticated, getServerUser } from "@/lib/auth-server";
 import { AppNav } from "@/components/app-nav";
+import { CommandPalette } from "@/components/command-palette";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const hasAuth = await isAuthenticated();
@@ -22,6 +23,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             : { name: null, email: null, image: null }
         }
       />
+      <CommandPalette />
       <main className="flex-1">{children}</main>
     </div>
   );
