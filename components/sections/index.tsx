@@ -47,13 +47,17 @@ interface SectionRendererProps {
   theme: Theme;
   className?: string;
   isCommentMode?: boolean;
-  selectedElement?: HTMLElement | null;
+  isSelectMode?: boolean;
   onElementClick?: (element: HTMLElement, event: React.MouseEvent) => void;
+  onTextEdit?: (oldText: string, newText: string) => void;
 }
 
 // Selector for interactive elements
 const INTERACTIVE_ELEMENTS_SELECTOR =
   'h1, h2, h3, h4, h5, h6, p, span, a, button, img, li, div[class*="card"], div[class*="item"]';
+
+// Selector for text elements that can be edited
+const TEXT_ELEMENTS_SELECTOR = 'h1, h2, h3, h4, h5, h6, p, span, a, button, li';
 
 // Dynamic section renderer
 export function SectionRenderer({
@@ -62,8 +66,9 @@ export function SectionRenderer({
   theme,
   className,
   isCommentMode,
-  selectedElement,
+  isSelectMode,
   onElementClick,
+  onTextEdit,
 }: SectionRendererProps) {
   const Component = sectionRegistry[type as SectionType];
 
@@ -100,10 +105,77 @@ export function SectionRenderer({
     }
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (!isSelectMode || !onTextEdit) return;
+
+    const target = e.target as HTMLElement;
+    const textElement = target.closest(TEXT_ELEMENTS_SELECTOR) as HTMLElement;
+
+    if (!textElement) return;
+
+    // Skip if already editing
+    if (textElement.getAttribute("contenteditable") === "true") return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Store original text for potential cancel
+    const originalText = textElement.textContent || "";
+
+    // Make element editable
+    textElement.setAttribute("contenteditable", "true");
+    textElement.classList.add("select-editing-element");
+    textElement.focus();
+
+    // Select all text
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textElement);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    const handleBlur = () => {
+      textElement.removeAttribute("contenteditable");
+      textElement.classList.remove("select-editing-element");
+
+      const newText = textElement.textContent || "";
+      if (newText !== originalText && newText.trim() !== "") {
+        onTextEdit(originalText, newText);
+      } else if (newText.trim() === "") {
+        // Restore original if empty
+        textElement.textContent = originalText;
+      }
+
+      textElement.removeEventListener("blur", handleBlur);
+      textElement.removeEventListener("keydown", handleKeyDown);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        textElement.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        textElement.textContent = originalText;
+        textElement.blur();
+      }
+    };
+
+    textElement.addEventListener("blur", handleBlur);
+    textElement.addEventListener("keydown", handleKeyDown);
+  };
+
+  const modeClass = isCommentMode
+    ? "section-comment-mode"
+    : isSelectMode
+      ? "section-select-mode"
+      : "";
+
   return (
     <div
-      className={`relative ${isCommentMode ? "section-comment-mode" : ""}`}
+      className={`relative ${modeClass}`}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
       <Component content={content} theme={theme} className={className} />
 
@@ -124,6 +196,54 @@ export function SectionRenderer({
             outline-color: #3b82f6 !important;
             outline-offset: 4px !important;
             background-color: rgba(59, 130, 246, 0.1) !important;
+          }
+        `}</style>
+      )}
+
+      {/* Select mode styles */}
+      {isSelectMode && (
+        <style jsx global>{`
+          .section-select-mode h1,
+          .section-select-mode h2,
+          .section-select-mode h3,
+          .section-select-mode h4,
+          .section-select-mode h5,
+          .section-select-mode h6,
+          .section-select-mode p,
+          .section-select-mode span,
+          .section-select-mode a,
+          .section-select-mode button,
+          .section-select-mode li,
+          .section-select-mode img,
+          .section-select-mode div[class*="card"],
+          .section-select-mode div[class*="item"] {
+            outline: 1px solid transparent !important;
+            outline-offset: 2px !important;
+            transition: outline-color 150ms ease-out, outline-offset 150ms ease-out !important;
+            border-radius: 2px !important;
+          }
+          .section-select-mode h1:hover,
+          .section-select-mode h2:hover,
+          .section-select-mode h3:hover,
+          .section-select-mode h4:hover,
+          .section-select-mode h5:hover,
+          .section-select-mode h6:hover,
+          .section-select-mode p:hover,
+          .section-select-mode span:hover,
+          .section-select-mode a:hover,
+          .section-select-mode button:hover,
+          .section-select-mode li:hover,
+          .section-select-mode img:hover,
+          .section-select-mode div[class*="card"]:hover,
+          .section-select-mode div[class*="item"]:hover {
+            outline-color: rgba(100, 116, 139, 0.5) !important;
+            outline-offset: 4px !important;
+          }
+          .select-editing-element {
+            outline-color: #3b82f6 !important;
+            outline-offset: 4px !important;
+            background-color: rgba(59, 130, 246, 0.05) !important;
+            cursor: text !important;
           }
         `}</style>
       )}

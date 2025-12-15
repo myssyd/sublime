@@ -207,6 +207,53 @@ export default function EditorPage({
     setIsPopoverOpen(false);
   }, [selectedElement]);
 
+  // Helper function to recursively replace text in an object
+  const replaceTextInContent = useCallback(
+    (content: unknown, oldText: string, newText: string): unknown => {
+      if (typeof content === "string") {
+        // Direct string replacement
+        if (content === oldText) {
+          return newText;
+        }
+        return content;
+      }
+
+      if (Array.isArray(content)) {
+        return content.map((item) => replaceTextInContent(item, oldText, newText));
+      }
+
+      if (typeof content === "object" && content !== null) {
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(content)) {
+          result[key] = replaceTextInContent(value, oldText, newText);
+        }
+        return result;
+      }
+
+      return content;
+    },
+    []
+  );
+
+  const handleTextEdit = useCallback(
+    async (sectionId: string, oldText: string, newText: string) => {
+      if (!sections) return;
+
+      const section = sections.find((s: { _id: string }) => s._id === sectionId);
+      if (!section) return;
+
+      // Replace the old text with new text in the section content
+      const updatedContent = replaceTextInContent(section.content, oldText, newText);
+
+      // Update the section
+      await updateSection({
+        id: sectionId as Id<"sections">,
+        content: updatedContent,
+      });
+    },
+    [sections, replaceTextInContent, updateSection]
+  );
+
   const handleCommentSubmit = async (comment: string, model: string) => {
     if (!selectedElement || !selectedElementSectionId || !sections) return;
 
@@ -479,7 +526,7 @@ export default function EditorPage({
                             content={displayContent}
                             theme={theme}
                             isCommentMode={selectedTool === "comment"}
-                            selectedElement={selectedElement}
+                            isSelectMode={selectedTool === "cursor"}
                             onElementClick={(element, event) =>
                               handleElementClick(
                                 element,
@@ -487,6 +534,9 @@ export default function EditorPage({
                                 section.type,
                                 event
                               )
+                            }
+                            onTextEdit={(oldText, newText) =>
+                              handleTextEdit(section._id, oldText, newText)
                             }
                           />
                         </DraggableSection>
@@ -503,8 +553,9 @@ export default function EditorPage({
                         content={activeDragSection.content}
                         theme={theme}
                         isCommentMode={false}
-                        selectedElement={null}
+                        isSelectMode={false}
                         onElementClick={() => {}}
+                        onTextEdit={() => {}}
                       />
                     </div>
                   ) : null}
