@@ -1,14 +1,15 @@
 "use client";
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  SelectGroup,
-  SelectLabel,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxGroup,
+  ComboboxLabel,
+  ComboboxEmpty,
+} from "@/components/ui/combobox";
 import { cn } from "@/lib/utils";
 import { AI_MODELS, type AIModel } from "@/lib/models";
 
@@ -56,55 +57,48 @@ export function ModelSelector({
   }
 
   const groupedModels = groupModelsByProvider(filteredModels);
-  const selectedModel = AI_MODELS.find((m) => m.id === value);
 
   return (
-    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger
+    <Combobox
+      value={value}
+      onValueChange={(val) => {
+        if (val) onValueChange(val);
+      }}
+      disabled={disabled}
+    >
+      <ComboboxInput
+        placeholder="Select model..."
         className={cn(
-          size === "sm" ? "h-8 text-xs" : "h-9",
+          size === "sm" ? "[&_input]:h-8 [&_input]:text-xs" : "[&_input]:h-9",
           triggerClassName
         )}
+        showClear={false}
+      />
+      <ComboboxContent
+        className={cn("min-w-[200px]", className)}
+        positionerClassName="z-[200]"
       >
-        <SelectValue>
-          {selectedModel ? (
-            <span className="flex items-center gap-1.5">
-              <span>{selectedModel.name}</span>
-              {selectedModel.isFree && (
-                <span className="text-[10px] text-muted-foreground">(Free)</span>
-              )}
-            </span>
-          ) : (
-            "Select model"
-          )}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent className={cn("z-150", className)}>
-        {Object.entries(groupedModels).map(([provider, models]) => (
-          <SelectGroup key={provider}>
-            <SelectLabel className="text-xs text-muted-foreground px-2 py-1.5">
-              {provider}
-            </SelectLabel>
-            {models.map((model) => (
-              <SelectItem key={model.id} value={model.id}>
-                <div className="flex items-center gap-2">
-                  <span>{model.name}</span>
-                  {model.isFree && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400">
-                      Free
-                    </span>
-                  )}
-                </div>
-                {model.description && (
-                  <span className="text-xs text-muted-foreground ml-2">
-                    {model.description}
-                  </span>
-                )}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        ))}
-      </SelectContent>
-    </Select>
+        <ComboboxList>
+          <ComboboxEmpty>No models found</ComboboxEmpty>
+          {Object.entries(groupedModels).map(([provider, models]) => (
+            <ComboboxGroup key={provider}>
+              <ComboboxLabel>{provider}</ComboboxLabel>
+              {models.map((model) => (
+                <ComboboxItem key={model.id} value={model.id}>
+                  <div className="flex items-center gap-2">
+                    <span>{model.name}</span>
+                    {model.isFree && (
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400">
+                        Free
+                      </span>
+                    )}
+                  </div>
+                </ComboboxItem>
+              ))}
+            </ComboboxGroup>
+          ))}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }
