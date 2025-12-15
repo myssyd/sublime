@@ -42,7 +42,8 @@ import { RightSidebar } from "@/components/editor/right-sidebar";
 import { ChatSidebar } from "@/components/editor/chat-sidebar";
 import { DraggableSection } from "@/components/editor/draggable-section";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Loading03Icon } from "@hugeicons/core-free-icons";
+import { Loading03Icon, Cursor01Icon, CommentAdd02Icon } from "@hugeicons/core-free-icons";
+import { toast } from "sonner";
 
 // Helper to get element info for display
 function getElementInfo(element: HTMLElement, sectionType: string): string {
@@ -139,6 +140,44 @@ export default function EditorPage({
     }
   }, [selectedTool, selectedElement]);
 
+  // Tool change handler with toast notification
+  const handleToolChange = useCallback((tool: ToolType) => {
+    if (tool === selectedTool) return;
+
+    setSelectedTool(tool);
+
+    const toolConfig = {
+      cursor: { name: "Select", icon: Cursor01Icon, shortcut: "V" },
+      comment: { name: "Comment", icon: CommentAdd02Icon, shortcut: "C" },
+    };
+
+    const config = toolConfig[tool];
+    toast(
+      <div className="flex items-center gap-2">
+        <span>{config.name}</span>
+        <kbd className="px-1.5 py-0.5 text-[10px] font-medium bg-muted rounded border border-border">
+          {config.shortcut}
+        </kbd>
+      </div>,
+      {
+        id: "tool-switch",
+        icon: <HugeiconsIcon icon={config.icon} className="w-3.5 h-3.5" />,
+        position: "bottom-center",
+        duration: 800,
+        style: {
+          marginBottom: "56px",
+          padding: "8px 12px",
+          fontSize: "13px",
+          minHeight: "unset",
+          width: "auto",
+          maxWidth: "fit-content",
+          left: "50%",
+          transform: "translateX(-50%)",
+        },
+      }
+    );
+  }, [selectedTool]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -153,10 +192,10 @@ export default function EditorPage({
 
       switch (event.key.toLowerCase()) {
         case "v":
-          setSelectedTool("cursor");
+          handleToolChange("cursor");
           break;
         case "c":
-          setSelectedTool("comment");
+          handleToolChange("comment");
           break;
         case "s":
           setIsSidebarOpen((prev) => !prev);
@@ -174,7 +213,7 @@ export default function EditorPage({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handleToolChange]);
 
   const handleElementClick = useCallback(
     (element: HTMLElement, sectionId: string, sectionType: string, event: React.MouseEvent) => {
@@ -607,7 +646,7 @@ export default function EditorPage({
         viewportMode={viewportMode}
         onViewportChange={setViewportMode}
         selectedTool={selectedTool}
-        onToolChange={setSelectedTool}
+        onToolChange={handleToolChange}
         isChatOpen={isChatOpen}
         onChatToggle={() => setIsChatOpen((prev) => !prev)}
         isSidebarOpen={isSidebarOpen}

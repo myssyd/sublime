@@ -242,7 +242,6 @@ export function SectionRenderer({
           .select-editing-element {
             outline-color: #3b82f6 !important;
             outline-offset: 4px !important;
-            background-color: rgba(59, 130, 246, 0.05) !important;
             cursor: text !important;
           }
         `}</style>
