@@ -1,57 +1,28 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { useSession } from "@/lib/auth-client";
+import { redirect } from "next/navigation";
+import { ReactNode } from "react";
+import { isAuthenticated, getServerUser } from "@/lib/auth-server";
 import { AppNav } from "@/components/app-nav";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Loading03Icon } from "@hugeicons/core-free-icons";
 
-export default function AppLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const { data: session, isPending } = useSession();
-  const [userEnsured, setUserEnsured] = useState(false);
-  const ensureUser = useMutation(api.users.ensureUser);
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  // Server-side auth validation (defense-in-depth, proxy.ts handles most cases)
+  const hasAuth = await isAuthenticated();
 
-  // Ensure user exists in database after login
-  useEffect(() => {
-    if (session && !userEnsured) {
-      ensureUser()
-        .then(() => setUserEnsured(true))
-        .catch(console.error);
-    }
-    // Reset userEnsured when session is cleared (logout)
-    if (!session && userEnsured) {
-      setUserEnsured(false);
-    }
-  }, [session, userEnsured, ensureUser]);
-
-  const usage = useQuery(api.usage.getUsage, session && userEnsured ? {} : "skip");
-
-  // Redirect to login if not authenticated
-  if (!isPending && !session) {
-    router.push("/login");
-    return null;
+  if (!hasAuth) {
+    redirect("/login");
   }
 
-  // Show loading while ensuring user exists
-  if (isPending || (session && !userEnsured)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <HugeiconsIcon
-          icon={Loading03Icon}
-          className="w-8 h-8 text-muted-foreground animate-spin"
-          style={{ animationDuration: "0.5s" }}
-        />
-      </div>
-    );
-  }
+  // Get user data for AppNav (may be null for new OAuth users)
+  const user = await getServerUser();
 
   return (
     <div className="flex min-h-screen flex-col">
-      <AppNav user={session!.user} usage={usage} />
+      <AppNav
+        user={
+          user
+            ? { name: user.name, email: user.email, image: user.image }
+            : { name: null, email: null, image: null }
+        }
+      />
       <main className="flex-1">{children}</main>
     </div>
   );

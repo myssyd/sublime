@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signOut } from "@/lib/auth-client";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { signOut, useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,19 +25,35 @@ interface AppNavProps {
     email?: string | null;
     image?: string | null;
   };
-  usage?: {
-    usage: {
-      aiCallsThisMonth: number;
-    };
-    limits: {
-      aiCallsPerMonth: number;
-    };
-  } | null;
 }
 
-export function AppNav({ user, usage }: AppNavProps) {
+export function AppNav({ user }: AppNavProps) {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const { data: session, isPending } = useSession();
+  const ensureUser = useMutation(api.users.ensureUser);
+  const ensuredRef = useRef(false);
+
+  // Fetch usage data
+  const usage = useQuery(api.usage.getUsage, session ? {} : "skip");
+
+  // Ensure user exists in database (for new OAuth users)
+  useEffect(() => {
+    if (session && !ensuredRef.current) {
+      ensuredRef.current = true;
+      ensureUser().catch(console.error);
+    }
+    if (!session && !isPending) {
+      ensuredRef.current = false;
+    }
+  }, [session, isPending, ensureUser]);
+
+  // Redirect if session becomes invalid (e.g., expired)
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.push("/login");
+    }
+  }, [isPending, session, router]);
 
   const handleSignOut = async () => {
     await signOut();

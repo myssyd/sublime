@@ -33,7 +33,7 @@ export async function getAuthUser(ctx: QueryCtx | MutationCtx) {
     throw new Error("Unauthorized");
   }
 
-  // Find or create user in our users table
+  // Find user in our users table
   const existingUser = await ctx.db
     .query("users")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +44,7 @@ export async function getAuthUser(ctx: QueryCtx | MutationCtx) {
     return existingUser;
   }
 
-  // This shouldn't happen normally, but handle gracefully
+  // User not found - throw for queries, queries cannot create users
   throw new Error("User not found in database");
 }
 
