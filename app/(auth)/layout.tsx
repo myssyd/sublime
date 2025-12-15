@@ -1,7 +1,14 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ReactNode } from "react";
+import { isAuthenticated } from "@/lib/auth-server";
 
-export default function AuthLayout({ children }: { children: ReactNode }) {
+export default async function AuthLayout({ children }: { children: ReactNode }) {
+  const authenticated = await isAuthenticated();
+
+  if (authenticated) {
+    redirect("/dashboard");
+  }
   return (
     <div className="flex min-h-screen flex-col">
       {/* Header */}
