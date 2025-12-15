@@ -4,7 +4,6 @@ import { isAuthenticated, getServerUser } from "@/lib/auth-server";
 import { AppNav } from "@/components/app-nav";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  // Server-side auth validation (defense-in-depth, proxy.ts handles most cases)
   const hasAuth = await isAuthenticated();
 
   if (!hasAuth) {

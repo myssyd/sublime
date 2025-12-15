@@ -93,7 +93,7 @@ export default function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {pages.map((page: any) => (
             <Link key={page._id} href={`/editor/${page._id}`}>
-              <Card className="cursor-pointer transition-shadow hover:shadow-lg">
+              <Card className="cursor-pointer transition-all duration-200 ease-out hover:-translate-y-1 hover:ring-foreground/20 hover:shadow-md active:scale-[0.98] active:shadow-sm">
                 <CardHeader>
                   <CardTitle className="truncate">{page.name}</CardTitle>
                   <CardDescription className="truncate">
