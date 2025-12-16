@@ -15,7 +15,10 @@ export function PasskeySignInButton() {
     authClient.signIn.passkey({
       fetchOptions: {
         onSuccess() {
-          window.location.href = "/dashboard";
+          // Small delay to ensure session cookie is fully set
+          setTimeout(() => {
+            window.location.href = "/dashboard";
+          }, 200);
         },
         onError(context) {
           setError(context.error.message || "Passkey sign in failed");
