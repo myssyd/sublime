@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { AI_MODELS, type AIModel } from "@/lib/models";
 
 // Re-export for convenience
-export { AI_MODELS, MODEL_ID_MAP, getOpenRouterModelId, type AIModel } from "@/lib/models";
+export { AI_MODELS, MODEL_ID_MAP, DEFAULT_MODEL, getOpenRouterModelId, type AIModel } from "@/lib/models";
 
 // Group models by provider
 function groupModelsByProvider(models: AIModel[]): Record<string, AIModel[]> {

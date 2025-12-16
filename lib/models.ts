@@ -12,9 +12,9 @@ export interface AIModel {
 // Free models from OpenRouter - https://openrouter.ai/models?max_price=0
 export const AI_MODELS: AIModel[] = [
   // Google
-  { id: "gemma", name: "Gemma 3 27B", provider: "Google", isFree: true, description: "Open weights" },
-  { id: "gemini", name: "Gemini 2.0 Flash", provider: "Google", isFree: true, description: "Fast & capable" },
-  { id: "gemma-12b", name: "Gemma 3 12B", provider: "Google", isFree: true, description: "Compact & efficient" },
+  // { id: "gemma", name: "Gemma 3 27B", provider: "Google", isFree: true, description: "Open weights" },
+  // { id: "gemini", name: "Gemini 2.0 Flash", provider: "Google", isFree: true, description: "Fast & capable" },
+  // { id: "gemma-12b", name: "Gemma 3 12B", provider: "Google", isFree: true, description: "Compact & efficient" },
 
   // Meta
   { id: "llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", isFree: true, description: "Latest Llama" },
@@ -32,9 +32,12 @@ export const AI_MODELS: AIModel[] = [
   { id: "devstral", name: "Devstral", provider: "Mistral", isFree: true, description: "Developer focused" },
   { id: "mistral-small", name: "Mistral Small 3.1", provider: "Mistral", isFree: true, description: "Efficient & fast" },
 
+  // Nvidia
+  { id: "nemotron-nano", name: "Nemotron 3 Nano 30B", provider: "Nvidia", isFree: true, description: "Compact powerhouse" },
+
   // Paid models
-  { id: "claude", name: "Claude 3.5 Sonnet", provider: "Anthropic", isFree: false, description: "Balanced" },
-  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", isFree: false, description: "High quality" },
+  // { id: "claude", name: "Claude 3.5 Sonnet", provider: "Anthropic", isFree: false, description: "Balanced" },
+  // { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", isFree: false, description: "High quality" },
 ];
 
 // Map UI model IDs to OpenRouter model IDs
@@ -60,14 +63,17 @@ export const MODEL_ID_MAP: Record<string, string> = {
   "devstral": "mistralai/devstral-2512:free",
   "mistral-small": "mistralai/mistral-small-3.1-24b-instruct:free",
 
+  // Nvidia
+  "nemotron-nano": "nvidia/nemotron-3-nano-30b-a3b:free",
+
   // Paid
   "claude": "anthropic/claude-3.5-sonnet",
   "gpt-4o": "openai/gpt-4o",
   "gpt-4": "openai/gpt-4",
 };
 
-// Default model ID
-export const DEFAULT_MODEL = "gemini";
+// Default model ID (first model in the list)
+export const DEFAULT_MODEL = AI_MODELS[0]?.id ?? "llama-4-maverick";
 export const DEFAULT_OPENROUTER_MODEL = MODEL_ID_MAP[DEFAULT_MODEL];
 
 // Get OpenRouter model ID from UI model ID

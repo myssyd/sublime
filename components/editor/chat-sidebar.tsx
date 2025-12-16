@@ -16,6 +16,7 @@ import {
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
+import { DEFAULT_MODEL } from "@/lib/models";
 
 interface Message {
   id: string;
@@ -52,7 +53,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState("gemini");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 

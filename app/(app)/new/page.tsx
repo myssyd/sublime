@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ModelSelector } from "@/components/model-selector";
+import { ModelSelector, DEFAULT_MODEL } from "@/components/model-selector";
 import { Loading03Icon, ImageUploadIcon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -24,7 +24,7 @@ export default function NewPagePage() {
   const router = useRouter();
   const [businessName, setBusinessName] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
-  const [model, setModel] = useState("gemini");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);

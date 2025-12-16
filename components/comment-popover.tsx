@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ModelSelector } from "@/components/model-selector";
+import { ModelSelector, DEFAULT_MODEL } from "@/components/model-selector";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowUp01Icon, Loading03Icon, Cancel01Icon, Tick01Icon, ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
 
@@ -43,7 +43,7 @@ export function CommentPopover({
   onRejectChanges,
 }: CommentPopoverProps) {
   const [comment, setComment] = useState("");
-  const [model, setModel] = useState("gemini");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>('idle');
