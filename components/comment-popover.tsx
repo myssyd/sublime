@@ -48,6 +48,7 @@ export function CommentPopover({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>('idle');
   const popoverRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Calculate position based on click position (preferred) or element bounds
   useEffect(() => {
@@ -147,7 +148,11 @@ export function CommentPopover({
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
         // Don't close if clicking on the target element or selecting from dropdown
         if (targetElement?.contains(e.target as Node)) return;
-        if ((e.target as HTMLElement).closest('[data-radix-select-viewport]')) return;
+        // Check for various dropdown/popover elements (Radix Select, Radix Popover, cmdk)
+        const target = e.target as HTMLElement;
+        if (target.closest('[data-radix-select-viewport]')) return;
+        if (target.closest('[data-radix-popper-content-wrapper]')) return;
+        if (target.closest('[cmdk-root]')) return;
         onClose();
       }
     };
@@ -246,6 +251,7 @@ export function CommentPopover({
         {/* Comment input */}
         <div className="relative">
           <textarea
+            ref={textareaRef}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -261,7 +267,11 @@ export function CommentPopover({
           <div className="flex items-center gap-2">
             <ModelSelector
               value={model}
-              onValueChange={setModel}
+              onValueChange={(newModel) => {
+                setModel(newModel);
+                // Focus back on textarea after model selection
+                setTimeout(() => textareaRef.current?.focus(), 0);
+              }}
               disabled={isSubmitting}
               size="sm"
               triggerClassName="w-[140px]"
