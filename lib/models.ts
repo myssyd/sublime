@@ -21,8 +21,9 @@ export const AI_MODELS: AIModel[] = [
   { id: "llama-3.3-70b", name: "Llama 3.3 70B", provider: "Meta", isFree: true, description: "Large & powerful" },
 
   // DeepSeek
-  { id: "deepseek-chat", name: "DeepSeek Chat V3", provider: "DeepSeek", isFree: true, description: "Strong all-rounder" },
-  { id: "deepseek-r1", name: "DeepSeek R1", provider: "DeepSeek", isFree: true, description: "Reasoning model" },
+  { id: "deepseek-r1t2-chimera", name: "DeepSeek R1T2 Chimera", provider: "DeepSeek", isFree: true, description: "Enhanced reasoning" },
+  { id: "deepseek-r1t-chimera", name: "DeepSeek R1T Chimera", provider: "DeepSeek", isFree: true, description: "Reasoning hybrid" },
+  { id: "deepseek-v3.1-nex", name: "DeepSeek V3.1 Nex N1", provider: "DeepSeek", isFree: true, description: "Next-gen model" },
 
   // Qwen
   { id: "qwen", name: "Qwen3 Coder", provider: "Qwen", isFree: true, description: "Code focused" },
@@ -52,8 +53,9 @@ export const MODEL_ID_MAP: Record<string, string> = {
   "llama-3.3-70b": "meta-llama/llama-3.3-70b-instruct:free",
 
   // DeepSeek
-  "deepseek-chat": "deepseek/deepseek-chat-v3-0324:free",
-  "deepseek-r1": "deepseek/deepseek-r1:free",
+  "deepseek-r1t2-chimera": "tngtech/deepseek-r1t2-chimera:free",
+  "deepseek-r1t-chimera": "tngtech/deepseek-r1t-chimera:free",
+  "deepseek-v3.1-nex": "nex-agi/deepseek-v3.1-nex-n1:free",
 
   // Qwen
   "qwen": "qwen/qwen3-coder:free",
