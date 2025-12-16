@@ -12,9 +12,9 @@ export interface AIModel {
 // Free models from OpenRouter - https://openrouter.ai/models?max_price=0
 export const AI_MODELS: AIModel[] = [
   // Google
+  { id: "gemma", name: "Gemma 3 27B", provider: "Google", isFree: true, description: "Open weights" },
   { id: "gemini", name: "Gemini 2.0 Flash", provider: "Google", isFree: true, description: "Fast & capable" },
   { id: "gemini-thinking", name: "Gemini 2.0 Flash Thinking", provider: "Google", isFree: true, description: "Reasoning model" },
-  { id: "gemma", name: "Gemma 3 27B", provider: "Google", isFree: true, description: "Open weights" },
 
   // Meta
   { id: "llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", isFree: true, description: "Latest Llama" },
@@ -40,9 +40,9 @@ export const AI_MODELS: AIModel[] = [
 // Map UI model IDs to OpenRouter model IDs
 export const MODEL_ID_MAP: Record<string, string> = {
   // Google
+  "gemma": "google/gemma-3-27b-it:free",
   "gemini": "google/gemini-2.0-flash-exp:free",
   "gemini-thinking": "google/gemini-2.0-flash-thinking-exp:free",
-  "gemma": "google/gemma-3-27b-it:free",
 
   // Meta
   "llama-4-maverick": "meta-llama/llama-4-maverick:free",
