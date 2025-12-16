@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { UsageDisplay } from "@/components/settings/usage-display";
 import { PasswordForm } from "@/components/settings/password-form";
+import { PasskeyManager } from "@/components/settings/passkey-manager";
 import { ThemeSelector } from "@/components/settings/theme-selector";
 import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +48,8 @@ export default function SettingsPage() {
 
         <TabsContent value="account" className="mt-6 space-y-6">
           <PasswordForm />
+
+          <PasskeyManager />
 
           <ThemeSelector />
 

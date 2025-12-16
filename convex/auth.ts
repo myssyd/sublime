@@ -1,6 +1,7 @@
 import { createClient } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth";
+import { passkey } from "better-auth/plugins/passkey";
 import { components } from "./_generated/api";
 import { QueryCtx, MutationCtx } from "./_generated/server";
 
@@ -19,7 +20,12 @@ export const createAuth = (ctx: any) => {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       },
     },
-    plugins: [convex()],
+    plugins: [
+      convex(),
+      passkey({
+        rpName: "Sublime",
+      }),
+    ],
   });
 };
 

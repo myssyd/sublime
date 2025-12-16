@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { OAuthButtons } from "./oauth-buttons";
+import { PasskeySignInButton } from "./passkey-button";
 
 export function LoginForm() {
   const router = useRouter();
@@ -56,6 +57,7 @@ export function LoginForm() {
       </CardHeader>
       <CardContent className="space-y-4">
         <OAuthButtons />
+        <PasskeySignInButton />
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
