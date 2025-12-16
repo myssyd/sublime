@@ -92,7 +92,7 @@ export function ModelSelector({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className={cn("w-[320px] p-0 z-[200]", className)}
+        className={cn("w-[320px] p-0 z-200", className)}
         align="start"
       >
         <Command>
