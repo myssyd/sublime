@@ -11,7 +11,7 @@ export interface AIModel {
 
 // Free models from OpenRouter - https://openrouter.ai/models?max_price=0
 export const AI_MODELS: AIModel[] = [
-  // Google
+  // // Google
   // { id: "gemma", name: "Gemma 3 27B", provider: "Google", isFree: true, description: "Open weights" },
   // { id: "gemini", name: "Gemini 2.0 Flash", provider: "Google", isFree: true, description: "Fast & capable" },
   // { id: "gemma-12b", name: "Gemma 3 12B", provider: "Google", isFree: true, description: "Compact & efficient" },
@@ -27,7 +27,8 @@ export const AI_MODELS: AIModel[] = [
 
   // Qwen
   { id: "qwen", name: "Qwen3 Coder", provider: "Qwen", isFree: true, description: "Code focused" },
-  { id: "qwq", name: "QwQ 32B", provider: "Qwen", isFree: true, description: "Reasoning model" },
+  { id: "qwen3-235b", name: "Qwen3 235B", provider: "Qwen", isFree: true, description: "Large & powerful" },
+  { id: "qwen3-4b", name: "Qwen3 4B", provider: "Qwen", isFree: true, description: "Compact & fast" },
 
   // Mistral
   { id: "devstral", name: "Devstral", provider: "Mistral", isFree: true, description: "Developer focused" },
@@ -37,16 +38,16 @@ export const AI_MODELS: AIModel[] = [
   { id: "nemotron-nano", name: "Nemotron 3 Nano 30B", provider: "Nvidia", isFree: true, description: "Compact powerhouse" },
 
   // Paid models
-  // { id: "claude", name: "Claude 3.5 Sonnet", provider: "Anthropic", isFree: false, description: "Balanced" },
-  // { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", isFree: false, description: "High quality" },
+  { id: "claude", name: "Claude 3.5 Sonnet", provider: "Anthropic", isFree: false, description: "Balanced" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", isFree: false, description: "High quality" },
 ];
 
 // Map UI model IDs to OpenRouter model IDs
 export const MODEL_ID_MAP: Record<string, string> = {
-  // Google
-  "gemma": "google/gemma-3-27b-it:free",
-  "gemini": "google/gemini-2.0-flash-exp:free",
-  "gemma-12b": "google/gemma-3-12b-it:free",
+  // // Google
+  // "gemma": "google/gemma-3-27b-it:free",
+  // "gemini": "google/gemini-2.0-flash-exp:free",
+  // "gemma-12b": "google/gemma-3-12b-it:free",
 
   // Meta
   "llama-4-maverick": "meta-llama/llama-4-maverick:free",
@@ -59,7 +60,8 @@ export const MODEL_ID_MAP: Record<string, string> = {
 
   // Qwen
   "qwen": "qwen/qwen3-coder:free",
-  "qwq": "qwen/qwq-32b:free",
+  "qwen3-235b": "qwen/qwen3-235b-a22b:free",
+  "qwen3-4b": "qwen/qwen3-4b:free",
 
   // Mistral
   "devstral": "mistralai/devstral-2512:free",
