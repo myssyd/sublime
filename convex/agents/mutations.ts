@@ -24,9 +24,9 @@ export const createPageWithSections = internalMutation({
     sections: v.array(
       v.object({
         type: v.string(),
+        templateId: v.optional(v.string()),
         order: v.number(),
         content: v.any(),
-        variants: v.optional(v.array(v.any())),
       })
     ),
   },
@@ -60,11 +60,10 @@ export const createPageWithSections = internalMutation({
       await ctx.db.insert("sections", {
         landingPageId: pageId,
         type: section.type,
+        templateId: section.templateId,
         order: section.order,
         isVisible: true,
         content: section.content,
-        variants: section.variants,
-        selectedVariant: section.variants ? 0 : undefined,
         createdAt: now,
         updatedAt: now,
       });
@@ -114,9 +113,9 @@ export const addSection = internalMutation({
   args: {
     landingPageId: v.id("landingPages"),
     type: v.string(),
+    templateId: v.optional(v.string()),
     content: v.any(),
     order: v.optional(v.number()),
-    variants: v.optional(v.array(v.any())),
   },
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.landingPageId);
@@ -145,11 +144,10 @@ export const addSection = internalMutation({
     const sectionId = await ctx.db.insert("sections", {
       landingPageId: args.landingPageId,
       type: args.type,
+      templateId: args.templateId,
       order,
       isVisible: true,
       content: args.content,
-      variants: args.variants,
-      selectedVariant: args.variants ? 0 : undefined,
       createdAt: now,
       updatedAt: now,
     });

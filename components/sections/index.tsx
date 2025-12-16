@@ -2,6 +2,10 @@
 
 import { SectionType, Theme } from "@/lib/sections/definitions";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import type { StyleOverrides } from "@/lib/sections/templates";
+import { getTemplate, getDefaultTemplateId, hasTemplate } from "./registry";
+
+// Legacy section components (for backward compatibility)
 import { HeroSection } from "./hero-section";
 import { FeaturesSection } from "./features-section";
 import { PricingSection } from "./pricing-section";
@@ -18,7 +22,7 @@ import { LogosSection } from "./logos-section";
 import { AboutSection } from "./about-section";
 import { ServicesSection } from "./services-section";
 
-// Component registry mapping section types to their React components
+// Legacy component registry (for backward compatibility)
 export const sectionRegistry: Record<
   SectionType,
   React.ComponentType<{ content: any; theme: Theme; className?: string }>
@@ -43,8 +47,10 @@ export const sectionRegistry: Record<
 // Props for the SectionRenderer
 interface SectionRendererProps {
   type: string;
+  templateId?: string;
   content: any;
   theme: Theme;
+  styleOverrides?: StyleOverrides;
   className?: string;
   isCommentMode?: boolean;
   isSelectMode?: boolean;
@@ -62,18 +68,26 @@ const TEXT_ELEMENTS_SELECTOR = 'h1, h2, h3, h4, h5, h6, p, span, a, button, li';
 // Dynamic section renderer
 export function SectionRenderer({
   type,
+  templateId,
   content,
   theme,
+  styleOverrides,
   className,
   isCommentMode,
   isSelectMode,
   onElementClick,
   onTextEdit,
 }: SectionRendererProps) {
-  const Component = sectionRegistry[type as SectionType];
+  // Determine which template to use
+  const resolvedTemplateId = templateId || getDefaultTemplateId(type as SectionType);
+  const template = hasTemplate(resolvedTemplateId) ? getTemplate(resolvedTemplateId) : null;
 
-  if (!Component) {
-    console.warn(`Unknown section type: ${type}`);
+  // Use template system if available, otherwise fall back to legacy
+  const useLegacy = !template;
+  const LegacyComponent = useLegacy ? sectionRegistry[type as SectionType] : null;
+
+  if (!template && !LegacyComponent) {
+    console.warn(`Unknown section type or template: ${type} / ${templateId}`);
     return (
       <Empty className="border-red-300 p-8">
         <EmptyHeader>
@@ -171,13 +185,33 @@ export function SectionRenderer({
       ? "section-select-mode"
       : "";
 
+  // Render the appropriate component
+  const renderSection = () => {
+    if (template) {
+      const TemplateComponent = template.component;
+      return (
+        <TemplateComponent
+          content={content}
+          theme={theme}
+          styleOverrides={styleOverrides}
+          className={className}
+        />
+      );
+    }
+    // Legacy fallback
+    if (LegacyComponent) {
+      return <LegacyComponent content={content} theme={theme} className={className} />;
+    }
+    return null;
+  };
+
   return (
     <div
       className={`relative ${modeClass}`}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
-      <Component content={content} theme={theme} className={className} />
+      {renderSection()}
 
       {/* Comment mode styles */}
       {isCommentMode && (

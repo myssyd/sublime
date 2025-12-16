@@ -51,11 +51,16 @@ export default defineSchema({
   sections: defineTable({
     landingPageId: v.id("landingPages"),
     type: v.string(), // "hero", "features", "pricing", etc.
+    templateId: v.optional(v.string()), // e.g., "hero-centered", "hero-gradient"
     order: v.number(),
     isVisible: v.boolean(),
     content: v.any(), // Flexible JSON based on section type
-    variants: v.optional(v.array(v.any())),
-    selectedVariant: v.optional(v.number()),
+    styleOverrides: v.optional(
+      v.object({
+        section: v.optional(v.string()), // Tailwind classes for section container
+        elements: v.optional(v.any()), // Record<selector, tailwindClasses>
+      })
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_page", ["landingPageId"]),

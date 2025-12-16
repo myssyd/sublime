@@ -50,7 +50,13 @@ export const create = mutation({
     type: v.string(),
     order: v.number(),
     content: v.any(),
-    variants: v.optional(v.array(v.any())),
+    templateId: v.optional(v.string()),
+    styleOverrides: v.optional(
+      v.object({
+        section: v.optional(v.string()),
+        elements: v.optional(v.any()),
+      })
+    ),
   },
   handler: async (ctx: any, args: any) => {
     const user = await getAuthUser(ctx);
@@ -65,11 +71,11 @@ export const create = mutation({
     const sectionId = await ctx.db.insert("sections", {
       landingPageId: args.landingPageId,
       type: args.type,
+      templateId: args.templateId,
       order: args.order,
       isVisible: true,
       content: args.content,
-      variants: args.variants,
-      selectedVariant: args.variants ? 0 : undefined,
+      styleOverrides: args.styleOverrides,
       createdAt: now,
       updatedAt: now,
     });
@@ -86,11 +92,16 @@ export const update = mutation({
   args: {
     id: v.id("sections"),
     type: v.optional(v.string()),
+    templateId: v.optional(v.string()),
     order: v.optional(v.number()),
     isVisible: v.optional(v.boolean()),
     content: v.optional(v.any()),
-    variants: v.optional(v.array(v.any())),
-    selectedVariant: v.optional(v.number()),
+    styleOverrides: v.optional(
+      v.object({
+        section: v.optional(v.string()),
+        elements: v.optional(v.any()),
+      })
+    ),
   },
   handler: async (ctx: any, args: any) => {
     const user = await getAuthUser(ctx);
@@ -186,5 +197,127 @@ export const remove = mutation({
     await ctx.db.patch(section.landingPageId, { updatedAt: Date.now() });
 
     return { success: true };
+  },
+});
+
+// Switch section template
+export const switchTemplate = mutation({
+  args: {
+    id: v.id("sections"),
+    templateId: v.string(),
+    mappedContent: v.optional(v.any()),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await getAuthUser(ctx);
+    const now = Date.now();
+
+    const section = await ctx.db.get(args.id);
+    if (!section) {
+      throw new Error("Section not found");
+    }
+
+    // Verify ownership through landing page
+    const page = await ctx.db.get(section.landingPageId);
+    if (!page || page.userId !== user._id) {
+      throw new Error("Section not found");
+    }
+
+    // Update template and optionally content
+    const updates: Record<string, unknown> = {
+      templateId: args.templateId,
+      updatedAt: now,
+    };
+
+    // If mapped content is provided (from AI), use it
+    if (args.mappedContent !== undefined) {
+      updates.content = args.mappedContent;
+    }
+
+    // Clear style overrides when switching templates (they may not apply)
+    updates.styleOverrides = undefined;
+
+    await ctx.db.patch(args.id, updates);
+
+    // Update landing page timestamp
+    await ctx.db.patch(section.landingPageId, { updatedAt: now });
+
+    return { success: true };
+  },
+});
+
+// Update section style overrides
+export const updateStyleOverrides = mutation({
+  args: {
+    id: v.id("sections"),
+    styleOverrides: v.object({
+      section: v.optional(v.string()),
+      elements: v.optional(v.any()),
+    }),
+  },
+  handler: async (ctx: any, args: any) => {
+    const user = await getAuthUser(ctx);
+    const now = Date.now();
+
+    const section = await ctx.db.get(args.id);
+    if (!section) {
+      throw new Error("Section not found");
+    }
+
+    // Verify ownership through landing page
+    const page = await ctx.db.get(section.landingPageId);
+    if (!page || page.userId !== user._id) {
+      throw new Error("Unauthorized: Section not found");
+    }
+
+    // Get existing overrides
+    const existingOverrides = section.styleOverrides || {};
+    const existingElements = existingOverrides.elements || {};
+    const incomingElements = args.styleOverrides.elements || {};
+
+    // Build new overrides, preserving existing unless explicitly overridden
+    const newOverrides: { section?: string; elements?: Record<string, string> } = {};
+
+    // Handle section-level overrides
+    // If incoming section is provided and non-empty, use it
+    // If incoming section is undefined, keep existing
+    // If incoming section is empty string, this intentionally clears it
+    if (args.styleOverrides.section !== undefined) {
+      if (args.styleOverrides.section && args.styleOverrides.section.trim()) {
+        newOverrides.section = args.styleOverrides.section;
+      }
+      // else: explicitly clearing section (empty string passed)
+    } else if (existingOverrides.section) {
+      // Preserve existing section if no new value provided
+      newOverrides.section = existingOverrides.section;
+    }
+
+    // Handle element-level overrides - merge additively
+    const mergedElements: Record<string, string> = { ...existingElements };
+    for (const [selector, classes] of Object.entries(incomingElements)) {
+      if (typeof classes === "string" && classes.trim()) {
+        // Add or update this selector's classes
+        mergedElements[selector] = classes;
+      }
+      // Note: To remove a selector, you'd pass empty string or use a separate mutation
+    }
+
+    if (Object.keys(mergedElements).length > 0) {
+      newOverrides.elements = mergedElements;
+    }
+
+    // Determine final value
+    const finalOverrides =
+      Object.keys(newOverrides).length > 0 ? newOverrides : undefined;
+
+    await ctx.db.patch(args.id, {
+      styleOverrides: finalOverrides,
+      updatedAt: now,
+    });
+
+    // Update landing page timestamp
+    await ctx.db.patch(section.landingPageId, { updatedAt: now });
+
+    // Return the saved overrides for debugging
+    return { success: true, styleOverrides: finalOverrides };
   },
 });

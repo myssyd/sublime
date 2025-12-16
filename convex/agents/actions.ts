@@ -6,6 +6,15 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText } from "ai";
 import { DIRECT_GENERATION_PROMPT } from "../../lib/sections/ai-prompt";
 import { getOpenRouterModelId } from "../../lib/models";
+import {
+  getStyleModificationPrompt,
+  isStyleRequest,
+} from "../../lib/sections/ai-prompts/style-modification";
+import {
+  getContentMappingPrompt,
+  areTemplatesCompatible,
+} from "../../lib/sections/ai-prompts/content-mapping";
+import type { SectionType } from "../../lib/sections/definitions";
 
 // Set to false for real AI generation, true for testing with mock data
 const MOCK_MODE = false;
@@ -369,7 +378,12 @@ export const processComment = action({
     elementInfo: v.string(),
     model: v.string(),
   },
-  handler: async (ctx, args): Promise<{ response: string; updatedContent?: any }> => {
+  handler: async (ctx, args): Promise<{
+    response: string;
+    updatedContent?: any;
+    styleOverrides?: { section?: string; elements?: Record<string, string> };
+    isStyleChange?: boolean;
+  }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
@@ -389,7 +403,96 @@ export const processComment = action({
     // Get OpenRouter model ID from lib/models.ts
     const modelId = getOpenRouterModelId(args.model);
 
-    // Build the prompt for the AI
+    // Check if this is a style modification request
+    const isStyle = isStyleRequest(args.comment);
+
+    if (isStyle) {
+      // Use style modification prompt for style requests
+      const systemPrompt = getStyleModificationPrompt(section.type as SectionType);
+
+      // Extract element selector from elementInfo (e.g., "Hero > h1: \"Build Something...\"" -> "headline")
+      const elementSelector = extractElementSelector(args.elementInfo, section.type as SectionType);
+
+      const userPrompt = `Section Type: ${section.type}
+Template: ${section.templateId || "default"}
+Current Style Overrides: ${JSON.stringify(section.styleOverrides || {})}
+Selected Element: ${args.elementInfo}
+${elementSelector ? `Element Selector: ${elementSelector}` : ""}
+User Request: ${args.comment}`;
+
+      try {
+        const result = await generateText({
+          model: openrouter(modelId),
+          system: systemPrompt,
+          prompt: userPrompt,
+        });
+
+        console.log("AI Style Response:", result.text);
+
+        // Parse the response
+        let parsedResponse;
+        try {
+          const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsedResponse = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error("No valid JSON found");
+          }
+        } catch {
+          return {
+            response: "I couldn't process the style change request. Please try again with more specific details.",
+            isStyleChange: true,
+          };
+        }
+
+        // Validate the styleOverrides structure
+        const styleOverrides = parsedResponse.styleOverrides;
+        if (!styleOverrides) {
+          return {
+            response: "I couldn't determine the style changes needed. Please be more specific about what you'd like to change.",
+            isStyleChange: true,
+          };
+        }
+
+        // Check that styleOverrides has valid structure with at least one override
+        const hasSection = typeof styleOverrides.section === "string" && styleOverrides.section.trim() !== "";
+        const hasElements =
+          styleOverrides.elements &&
+          typeof styleOverrides.elements === "object" &&
+          Object.keys(styleOverrides.elements).length > 0;
+
+        if (!hasSection && !hasElements) {
+          return {
+            response: "I couldn't determine the style changes needed. Please be more specific about what you'd like to change.",
+            isStyleChange: true,
+          };
+        }
+
+        // Validate that element values are strings
+        if (styleOverrides.elements) {
+          for (const [selector, classes] of Object.entries(styleOverrides.elements)) {
+            if (typeof classes !== "string") {
+              console.warn(`Invalid element override for ${selector}:`, classes);
+              return {
+                response: "I encountered an error generating the style changes. Please try again.",
+                isStyleChange: true,
+              };
+            }
+          }
+        }
+
+        return {
+          response: parsedResponse.explanation || "Style changes ready to apply.",
+          styleOverrides: styleOverrides,
+          isStyleChange: true,
+        };
+      } catch (error) {
+        console.error("AI style processing error:", error);
+        throw new Error(`Failed to process style change: ${error}`);
+      }
+    }
+
+    // Content modification request - use existing logic
     const prompt = `You are editing a landing page section. The user has selected an element and wants to make a change.
 
 Section Type: ${section.type}
@@ -403,6 +506,10 @@ User's Request: ${args.comment}
 Please analyze the user's request and provide:
 1. A brief explanation of what you understand they want to change
 2. The updated section content that incorporates their requested change
+
+IMPORTANT: Do NOT use HTML tags like <strong>, <em>, <b>, <i>, etc. in the content.
+All styling should be handled separately through Tailwind CSS classes.
+Only modify the actual text content if the user is asking for text changes.
 
 Return your response in the following JSON format:
 {
@@ -437,6 +544,7 @@ Important: Return ONLY valid JSON, no markdown code blocks or other text.`;
       return {
         response: parsedResponse.explanation || result.text,
         updatedContent: parsedResponse.updatedContent,
+        isStyleChange: false,
       };
     } catch (error) {
       console.error("AI processing error:", error);
@@ -444,6 +552,38 @@ Important: Return ONLY valid JSON, no markdown code blocks or other text.`;
     }
   },
 });
+
+// Helper to extract element selector from element info
+function extractElementSelector(elementInfo: string, sectionType: SectionType): string | null {
+  // elementInfo format: "Section Name > tagName: \"text content...\""
+  // We need to map this to valid selectors like "headline", "subheadline", "cta.button", etc.
+
+  const lowerInfo = elementInfo.toLowerCase();
+
+  // Map tag names to common selectors
+  if (lowerInfo.includes("> h1")) {
+    return "headline";
+  }
+  if (lowerInfo.includes("> h2")) {
+    // Could be headline or subheadline depending on context
+    return sectionType === "hero" ? "subheadline" : "headline";
+  }
+  if (lowerInfo.includes("> h3") || lowerInfo.includes("> h4")) {
+    return "subheadline";
+  }
+  if (lowerInfo.includes("> p")) {
+    return "subheadline";
+  }
+  if (lowerInfo.includes("> button") || lowerInfo.includes("> a")) {
+    // Check if it's primary or secondary CTA
+    if (lowerInfo.includes("learn more") || lowerInfo.includes("secondary")) {
+      return "secondaryCta.button";
+    }
+    return "cta.button";
+  }
+
+  return null;
+}
 
 // Process a page-level chat message using AI
 export const processPageChat = action({
@@ -704,6 +844,175 @@ Generate a complete, beautiful landing page with appropriate sections for this b
       }
 
       throw new Error(`Failed to generate landing page: ${error.message || "Unknown error"}`);
+    }
+  },
+});
+
+// Process a style change request on a section using AI
+export const processStyleChange = action({
+  args: {
+    sectionId: v.id("sections"),
+    comment: v.string(),
+    elementInfo: v.optional(v.string()),
+    model: v.string(),
+  },
+  handler: async (ctx, args): Promise<{
+    response: string;
+    styleOverrides?: { section?: string; elements?: Record<string, string> };
+    isStyleChange: boolean;
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get the section
+    const section = await ctx.runQuery(api.sections.get, { id: args.sectionId });
+    if (!section) {
+      throw new Error("Section not found");
+    }
+
+    // Check if this is a style request
+    if (!isStyleRequest(args.comment)) {
+      return {
+        response: "This doesn't appear to be a style change request. Please describe the visual change you'd like to make.",
+        isStyleChange: false,
+      };
+    }
+
+    // Create OpenRouter provider
+    const openrouter = createOpenRouter({
+      apiKey: process.env.OPENROUTER_API_KEY!,
+    });
+
+    const modelId = getOpenRouterModelId(args.model);
+    const systemPrompt = getStyleModificationPrompt(section.type as SectionType);
+
+    const userPrompt = `Section Type: ${section.type}
+Template: ${section.templateId || "default"}
+Current Style Overrides: ${JSON.stringify(section.styleOverrides || {})}
+${args.elementInfo ? `Selected Element: ${args.elementInfo}` : ""}
+User Request: ${args.comment}`;
+
+    try {
+      const result = await generateText({
+        model: openrouter(modelId),
+        system: systemPrompt,
+        prompt: userPrompt,
+      });
+
+      console.log("AI Style Response:", result.text);
+
+      // Parse the response
+      let parsedResponse;
+      try {
+        const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsedResponse = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No valid JSON found");
+        }
+      } catch {
+        return {
+          response: "I couldn't understand the style change request. Please try again with more specific details.",
+          isStyleChange: false,
+        };
+      }
+
+      return {
+        response: parsedResponse.explanation || "Style changes applied.",
+        styleOverrides: parsedResponse.styleOverrides,
+        isStyleChange: true,
+      };
+    } catch (error) {
+      console.error("AI style processing error:", error);
+      throw new Error(`Failed to process style change: ${error}`);
+    }
+  },
+});
+
+// Switch a section to a different template with AI content mapping
+export const switchSectionTemplate = action({
+  args: {
+    sectionId: v.id("sections"),
+    newTemplateId: v.string(),
+    model: v.string(),
+  },
+  handler: async (ctx, args): Promise<{
+    success: boolean;
+    aiMapped: boolean;
+    notes?: string;
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get the section
+    const section = await ctx.runQuery(api.sections.get, { id: args.sectionId });
+    if (!section) {
+      throw new Error("Section not found");
+    }
+
+    const currentTemplateId = section.templateId || `${section.type}-default`;
+
+    // Check if templates are compatible (same section type = direct mapping)
+    if (areTemplatesCompatible(currentTemplateId, args.newTemplateId)) {
+      // Direct switch - no AI needed
+      await ctx.runMutation(api.sections.switchTemplate, {
+        id: args.sectionId,
+        templateId: args.newTemplateId,
+      });
+      return { success: true, aiMapped: false };
+    }
+
+    // AI-powered content mapping
+    const openrouter = createOpenRouter({
+      apiKey: process.env.OPENROUTER_API_KEY!,
+    });
+
+    const modelId = getOpenRouterModelId(args.model);
+    const prompt = getContentMappingPrompt(
+      currentTemplateId,
+      args.newTemplateId,
+      section.content
+    );
+
+    try {
+      const result = await generateText({
+        model: openrouter(modelId),
+        prompt,
+      });
+
+      console.log("AI Content Mapping Response:", result.text);
+
+      let parsedResponse;
+      try {
+        const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsedResponse = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No valid JSON found");
+        }
+      } catch {
+        throw new Error("Failed to parse AI content mapping response");
+      }
+
+      // Update the section with new template and mapped content
+      await ctx.runMutation(api.sections.switchTemplate, {
+        id: args.sectionId,
+        templateId: args.newTemplateId,
+        mappedContent: parsedResponse.mappedContent,
+      });
+
+      return {
+        success: true,
+        aiMapped: true,
+        notes: parsedResponse.notes,
+      };
+    } catch (error) {
+      console.error("AI content mapping error:", error);
+      throw new Error(`Failed to switch template: ${error}`);
     }
   },
 });

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 interface Section {
   _id: string;
   type: string;
+  templateId?: string;
   order: number;
 }
 
@@ -19,6 +20,8 @@ interface RightSidebarProps {
   onSectionSelect: (id: string) => void;
   theme: Theme;
   onThemeChange: (updates: Partial<Theme>) => void;
+  onTemplateChange?: (sectionId: string, templateId: string) => void;
+  isTemplateLoading?: boolean;
 }
 
 export function RightSidebar({
@@ -28,6 +31,8 @@ export function RightSidebar({
   onSectionSelect,
   theme,
   onThemeChange,
+  onTemplateChange,
+  isTemplateLoading,
 }: RightSidebarProps) {
   return (
     <div
@@ -53,6 +58,8 @@ export function RightSidebar({
               sections={sections}
               selectedSectionId={selectedSectionId}
               onSectionSelect={onSectionSelect}
+              onTemplateChange={onTemplateChange}
+              isTemplateLoading={isTemplateLoading}
             />
           </TabsContent>
           <TabsContent value="settings" className="flex-1 mt-0 overflow-y-auto">

@@ -14,6 +14,18 @@ import {
 import { SectionRenderer } from "@/components/sections";
 import { CommentPopover } from "@/components/comment-popover";
 import { Theme, SectionType } from "@/lib/sections/definitions";
+import type { StyleOverrides } from "@/lib/sections/templates";
+import { validateStyleOverrides } from "@/lib/sections/style-overrides";
+
+// Section type from database
+interface Section {
+  _id: string;
+  type: string;
+  templateId?: string;
+  order: number;
+  content: unknown;
+  styleOverrides?: StyleOverrides;
+}
 import { getSectionDisplayName } from "@/lib/sections/metadata";
 import {
   DndContext,
@@ -106,6 +118,12 @@ export default function EditorPage({
     oldContent: unknown;
     newContent: unknown;
   } | null>(null);
+  // Preview state for style overrides
+  const [previewStyleOverrides, setPreviewStyleOverrides] = useState<{
+    sectionId: string;
+    oldStyleOverrides: StyleOverrides | undefined;
+    newStyleOverrides: StyleOverrides;
+  } | null>(null);
   const [isShowingNewContent, setIsShowingNewContent] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
 
@@ -128,8 +146,13 @@ export default function EditorPage({
 
   // Mutations
   const updateSection = useMutation(api.sections.update);
+  const updateStyleOverrides = useMutation(api.sections.updateStyleOverrides);
   const updatePage = useMutation(api.landingPages.update);
   const reorderSections = useMutation(api.sections.reorder);
+  const switchTemplate = useMutation(api.sections.switchTemplate);
+
+  // Template switching state
+  const [isTemplateSwitching, setIsTemplateSwitching] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -301,7 +324,7 @@ export default function EditorPage({
       if (!sections) return;
 
       const section = sections.find(
-        (s: { _id: string }) => s._id === sectionId
+        (s: Section) => s._id === sectionId
       );
       if (!section) return;
 
@@ -329,7 +352,7 @@ export default function EditorPage({
 
     // Find the current section content
     const currentSection = sections.find(
-      (s: { _id: string }) => s._id === sectionId
+      (s: Section) => s._id === sectionId
     );
     if (!currentSection) return;
 
@@ -344,8 +367,25 @@ export default function EditorPage({
         model,
       });
 
-      // If AI returned updated content, store for preview
-      if (result.updatedContent) {
+      // Handle style change response
+      if (result.isStyleChange && result.styleOverrides) {
+        // Validate the AI response before using it
+        const validation = validateStyleOverrides(result.styleOverrides);
+        if (!validation.valid) {
+          console.warn("Invalid styleOverrides from AI:", validation.errors);
+          toast.error("AI returned invalid style data. Please try again.");
+          return;
+        }
+
+        setPreviewStyleOverrides({
+          sectionId,
+          oldStyleOverrides: currentSection.styleOverrides,
+          newStyleOverrides: result.styleOverrides,
+        });
+        setIsShowingNewContent(true);
+      }
+      // Handle content change response
+      else if (result.updatedContent) {
         setPreviewContent({
           sectionId,
           oldContent: currentSection.content,
@@ -410,25 +450,40 @@ export default function EditorPage({
   }, []);
 
   const handleAcceptChanges = useCallback(async () => {
-    if (!previewContent) return;
-
     setIsAccepting(true);
     try {
-      await updateSection({
-        id: previewContent.sectionId as Id<"sections">,
-        content: previewContent.newContent,
-      });
+      // Handle style override changes
+      if (previewStyleOverrides) {
+        await updateStyleOverrides({
+          id: previewStyleOverrides.sectionId as Id<"sections">,
+          styleOverrides: previewStyleOverrides.newStyleOverrides,
+        });
+        setPreviewStyleOverrides(null);
+        toast.success("Style changes saved");
+        handleClosePopover();
+      }
+      // Handle content changes
+      else if (previewContent) {
+        await updateSection({
+          id: previewContent.sectionId as Id<"sections">,
+          content: previewContent.newContent,
+        });
+        setPreviewContent(null);
+        toast.success("Content changes saved");
+        handleClosePopover();
+      }
     } catch (error) {
       console.error("Failed to save changes:", error);
+      toast.error("Failed to save changes. Please try again.");
+      // Do NOT close popover - allow user to retry
     } finally {
       setIsAccepting(false);
-      setPreviewContent(null);
-      handleClosePopover();
     }
-  }, [previewContent, updateSection, handleClosePopover]);
+  }, [previewContent, previewStyleOverrides, updateSection, updateStyleOverrides, handleClosePopover]);
 
   const handleRejectChanges = useCallback(() => {
     setPreviewContent(null);
+    setPreviewStyleOverrides(null);
   }, []);
 
   // Sync local theme from server when page loads or server theme changes
@@ -463,6 +518,26 @@ export default function EditorPage({
     [localTheme, page?.theme, pageId, updatePage]
   );
 
+  // Template switching handler
+  const handleTemplateChange = useCallback(
+    async (sectionId: string, templateId: string) => {
+      setIsTemplateSwitching(true);
+      try {
+        await switchTemplate({
+          id: sectionId as Id<"sections">,
+          templateId,
+        });
+        toast.success("Template switched successfully");
+      } catch (error) {
+        console.error("Failed to switch template:", error);
+        toast.error("Failed to switch template");
+      } finally {
+        setIsTemplateSwitching(false);
+      }
+    },
+    [switchTemplate]
+  );
+
   // Drag handlers
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -475,15 +550,15 @@ export default function EditorPage({
     if (!over || active.id === over.id || !sections) return;
 
     const oldIndex = sections.findIndex(
-      (s: { _id: string }) => s._id === active.id
+      (s: Section) => s._id === active.id
     );
     const newIndex = sections.findIndex(
-      (s: { _id: string }) => s._id === over.id
+      (s: Section) => s._id === over.id
     );
 
     if (oldIndex !== -1 && newIndex !== -1) {
       const newOrder = arrayMove(
-        sections.map((s: { _id: string }) => s._id),
+        sections.map((s: Section) => s._id),
         oldIndex,
         newIndex
       );
@@ -532,9 +607,9 @@ export default function EditorPage({
     mobile: "w-full max-w-[375px] mx-auto",
   };
 
-  const sectionIds = sections?.map((s: { _id: string }) => s._id) || [];
+  const sectionIds = sections?.map((s: Section) => s._id) || [];
   const activeDragSection = activeId
-    ? sections?.find((s: { _id: string }) => s._id === activeId)
+    ? sections?.find((s: Section) => s._id === activeId)
     : null;
 
   return (
@@ -577,21 +652,26 @@ export default function EditorPage({
                   strategy={verticalListSortingStrategy}
                 >
                   <div>
-                    {sections.map(
-                      (section: {
-                        _id: string;
-                        type: string;
-                        content: unknown;
-                      }) => {
+                    {sections.map((section: Section) => {
                         // Use preview content if this section is being previewed
-                        const isPreviewingThisSection =
+                        const isPreviewingContent =
                           previewContent !== null &&
                           previewContent.sectionId === section._id;
-                        const displayContent = isPreviewingThisSection
+                        const displayContent = isPreviewingContent
                           ? isShowingNewContent
                             ? previewContent.newContent
                             : previewContent.oldContent
                           : section.content;
+
+                        // Use preview style overrides if this section is being previewed
+                        const isPreviewingStyles =
+                          previewStyleOverrides !== null &&
+                          previewStyleOverrides.sectionId === section._id;
+                        const displayStyleOverrides = isPreviewingStyles
+                          ? isShowingNewContent
+                            ? previewStyleOverrides.newStyleOverrides
+                            : previewStyleOverrides.oldStyleOverrides
+                          : section.styleOverrides;
 
                         return (
                           <DraggableSection
@@ -601,8 +681,10 @@ export default function EditorPage({
                           >
                             <SectionRenderer
                               type={section.type}
+                              templateId={section.templateId}
                               content={displayContent}
                               theme={theme}
+                              styleOverrides={displayStyleOverrides}
                               isCommentMode={selectedTool === "comment"}
                               isSelectMode={selectedTool === "cursor"}
                               onElementClick={(element, event) =>
@@ -629,8 +711,10 @@ export default function EditorPage({
                     <div className="opacity-80 shadow-2xl rounded-lg overflow-hidden">
                       <SectionRenderer
                         type={activeDragSection.type}
+                        templateId={activeDragSection.templateId}
                         content={activeDragSection.content}
                         theme={theme}
+                        styleOverrides={activeDragSection.styleOverrides}
                         isCommentMode={false}
                         isSelectMode={false}
                         onElementClick={() => {}}
@@ -651,7 +735,7 @@ export default function EditorPage({
               elementInfo={selectedElementInfo}
               clickPosition={clickPosition}
               isProcessing={isProcessing}
-              previewMode={previewContent !== null}
+              previewMode={previewContent !== null || previewStyleOverrides !== null}
               isAccepting={isAccepting}
               isShowingNewContent={isShowingNewContent}
               onTogglePreview={handleTogglePreview}
@@ -668,6 +752,8 @@ export default function EditorPage({
             onSectionSelect={setSelectedSectionId}
             theme={theme}
             onThemeChange={handleThemeChange}
+            onTemplateChange={handleTemplateChange}
+            isTemplateLoading={isTemplateSwitching}
           />
         </div>
       </div>
