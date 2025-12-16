@@ -100,83 +100,85 @@ export function SectionRenderer({
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    if (!isCommentMode || !onElementClick) return;
+    // Handle comment mode
+    if (isCommentMode && onElementClick) {
+      e.preventDefault();
+      e.stopPropagation();
 
-    e.preventDefault();
-    e.stopPropagation();
+      // Find the closest interactive element (not the section wrapper itself)
+      const target = e.target as HTMLElement;
+      const interactiveElement = target.closest(
+        INTERACTIVE_ELEMENTS_SELECTOR
+      ) as HTMLElement;
 
-    // Find the closest interactive element (not the section wrapper itself)
-    const target = e.target as HTMLElement;
-    const interactiveElement = target.closest(
-      INTERACTIVE_ELEMENTS_SELECTOR
-    ) as HTMLElement;
-
-    if (interactiveElement) {
-      onElementClick(interactiveElement, e);
-    } else {
-      // Fallback to the clicked element itself
-      onElementClick(target, e);
+      if (interactiveElement) {
+        onElementClick(interactiveElement, e);
+      } else {
+        // Fallback to the clicked element itself
+        onElementClick(target, e);
+      }
+      return;
     }
-  };
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    if (!isSelectMode || !onTextEdit) return;
+    // Handle select mode - single click to edit text
+    if (isSelectMode && onTextEdit) {
+      const target = e.target as HTMLElement;
+      const textElement = target.closest(TEXT_ELEMENTS_SELECTOR) as HTMLElement;
 
-    const target = e.target as HTMLElement;
-    const textElement = target.closest(TEXT_ELEMENTS_SELECTOR) as HTMLElement;
+      if (!textElement) return;
 
-    if (!textElement) return;
+      // Skip if already editing
+      if (textElement.getAttribute("contenteditable") === "true") return;
 
-    // Skip if already editing
-    if (textElement.getAttribute("contenteditable") === "true") return;
+      e.preventDefault();
+      e.stopPropagation();
 
-    e.preventDefault();
-    e.stopPropagation();
+      // Store original text for potential cancel
+      const originalText = textElement.textContent || "";
 
-    // Store original text for potential cancel
-    const originalText = textElement.textContent || "";
+      // Make element editable
+      textElement.setAttribute("contenteditable", "true");
+      textElement.classList.add("select-editing-element");
+      textElement.focus();
 
-    // Make element editable
-    textElement.setAttribute("contenteditable", "true");
-    textElement.classList.add("select-editing-element");
-    textElement.focus();
+      // Place cursor at end of text
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(textElement);
+      range.collapse(false); // false = collapse to end
+      selection?.removeAllRanges();
+      selection?.addRange(range);
 
-    // Select all text
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(textElement);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+      const handleBlur = () => {
+        textElement.removeAttribute("contenteditable");
+        textElement.classList.remove("select-editing-element");
 
-    const handleBlur = () => {
-      textElement.removeAttribute("contenteditable");
-      textElement.classList.remove("select-editing-element");
+        const newText = textElement.textContent || "";
+        if (newText !== originalText && newText.trim() !== "") {
+          onTextEdit(originalText, newText);
+        } else if (newText.trim() === "") {
+          // Restore original if empty
+          textElement.textContent = originalText;
+        }
 
-      const newText = textElement.textContent || "";
-      if (newText !== originalText && newText.trim() !== "") {
-        onTextEdit(originalText, newText);
-      } else if (newText.trim() === "") {
-        // Restore original if empty
-        textElement.textContent = originalText;
-      }
+        textElement.removeEventListener("blur", handleBlur);
+        textElement.removeEventListener("keydown", handleKeyDown);
+      };
 
-      textElement.removeEventListener("blur", handleBlur);
-      textElement.removeEventListener("keydown", handleKeyDown);
-    };
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          textElement.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          textElement.textContent = originalText;
+          textElement.blur();
+        }
+      };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        textElement.blur();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        textElement.textContent = originalText;
-        textElement.blur();
-      }
-    };
-
-    textElement.addEventListener("blur", handleBlur);
-    textElement.addEventListener("keydown", handleKeyDown);
+      textElement.addEventListener("blur", handleBlur);
+      textElement.addEventListener("keydown", handleKeyDown);
+    }
   };
 
   const modeClass = isCommentMode
@@ -209,7 +211,6 @@ export function SectionRenderer({
     <div
       className={`relative ${modeClass}`}
       onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
     >
       {renderSection()}
 
