@@ -188,7 +188,7 @@ export default function NewPagePage() {
               value={businessDescription}
               onChange={(e) => setBusinessDescription(e.target.value)}
               placeholder="e.g., A cozy neighborhood coffee shop in downtown Austin serving specialty espresso drinks, fresh pastries, and light breakfast items. Open 7am-6pm daily. Known for our friendly baristas and relaxing atmosphere. Free WiFi available. ⭐ 4.8 rating with 500+ reviews..."
-              className="min-h-[120px]"
+              className="min-h-[120px] max-h-[300px] overflow-y-auto"
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
