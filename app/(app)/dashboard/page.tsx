@@ -26,7 +26,6 @@ import {
 export default function DashboardPage() {
   const { data: session } = useSession();
   const pages = useQuery(api.landingPages.list, session ? {} : "skip");
-  const canCreate = useQuery(api.usage.canCreatePage, session ? {} : "skip");
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -37,25 +36,10 @@ export default function DashboardPage() {
             Create and manage your AI-generated landing pages
           </p>
         </div>
-        {canCreate?.canCreate && (
-          <Link href="/new">
-            <Button>Create New Page</Button>
-          </Link>
-        )}
+        <Link href="/new">
+          <Button>Create New Page</Button>
+        </Link>
       </div>
-
-      {/* Usage warning */}
-      {canCreate && !canCreate.canCreate && (
-        <Card className="mb-6 border-yellow-500/50 bg-yellow-500/10">
-          <CardContent className="flex items-center justify-between py-4">
-            <p className="text-sm">
-              You&apos;ve reached your limit of {canCreate.max} pages. Upgrade to
-              Pro for unlimited pages.
-            </p>
-            <Button size="sm">Upgrade to Pro</Button>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Pages grid */}
       {pages === undefined ? (

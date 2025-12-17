@@ -2,11 +2,13 @@ import { mutation, query } from "./_generated/server";
 import { getAuthUser } from "./auth";
 
 // Plan limits configuration
+// NOTE: Free tier limits raised to match pro for testing. Original free limits were:
+// maxPages: 3, aiCallsPerMonth: 100, maxStorageBytes: 50MB
 export const PLAN_LIMITS = {
   free: {
-    maxPages: 3,
-    aiCallsPerMonth: 100,
-    maxStorageBytes: 50 * 1024 * 1024, // 50MB
+    maxPages: Infinity,
+    aiCallsPerMonth: 2000,
+    maxStorageBytes: 5 * 1024 * 1024 * 1024, // 5GB
   },
   pro: {
     maxPages: Infinity,

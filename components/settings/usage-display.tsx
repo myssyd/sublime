@@ -4,7 +4,6 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -93,14 +92,6 @@ export function UsageDisplay() {
           valueLabel={`${formatBytes(stats.storageUsedBytes)} / ${formatBytes(limits.maxStorageBytes)}`}
         />
 
-        {!isPro && (
-          <div className="pt-4 border-t">
-            <p className="text-sm text-muted-foreground mb-3">
-              Upgrade to Pro for unlimited pages, 2000 AI calls/month, and 5GB storage.
-            </p>
-            <Button>Upgrade to Pro</Button>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
