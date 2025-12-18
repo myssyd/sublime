@@ -17,7 +17,7 @@ export const AI_MODELS: AIModel[] = [
   // { id: "gemma-12b", name: "Gemma 3 12B", provider: "Google", isFree: true, description: "Compact & efficient" },
 
   // Meta
-  { id: "llama-4-maverick", name: "Llama 4 Maverick", provider: "Meta", isFree: true, description: "Latest Llama" },
+  { id: "llama-4-maverick", name: "Llama 3.3 70B Instruct", provider: "Meta", isFree: true, description: "Large & powerful" },
   { id: "llama-3.3-70b", name: "Llama 3.3 70B", provider: "Meta", isFree: true, description: "Large & powerful" },
 
   // DeepSeek
@@ -50,7 +50,7 @@ export const MODEL_ID_MAP: Record<string, string> = {
   // "gemma-12b": "google/gemma-3-12b-it:free",
 
   // Meta
-  "llama-4-maverick": "meta-llama/llama-4-maverick:free",
+  "llama-4-maverick": "meta-llama/llama-3.3-70b-instruct:free",
   "llama-3.3-70b": "meta-llama/llama-3.3-70b-instruct:free",
 
   // DeepSeek

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Theme } from "@/lib/sections/definitions";
 import {
   Select,
@@ -9,9 +10,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ColorPicker } from "@/components/ui/color-picker";
-import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { SparklesIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import {
+  PRESET_THEMES,
+  generateThemeFromPrimary,
+  findMatchingPreset,
+  parseHslString,
+  type PresetTheme,
+} from "@/lib/theme-presets";
 
 interface SettingsPanelProps {
   theme: Theme;
@@ -31,53 +44,144 @@ const fontOptions = [
   { value: "system-ui", label: "System Default" },
 ];
 
-// Generate harmonious colors based on a primary color
-function generateHarmoniousColors(primaryHsl: string): Partial<Theme> {
-  // Parse HSL from string like "hsl(210, 80%, 50%)"
-  const match = primaryHsl.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%,\s*(\d+(?:\.\d+)?)%\)/);
-  if (!match) return {};
+function ThemeSwatch({
+  preset,
+  isSelected,
+  onClick,
+}: {
+  preset: PresetTheme;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const color = `hsl(${preset.hue}, ${preset.saturation}%, ${preset.lightness}%)`;
 
-  const h = parseFloat(match[1]);
-  const s = parseFloat(match[2]);
-  const l = parseFloat(match[3]);
-
-  // Generate complementary and analogous colors
-  const secondary = `hsl(${(h + 30) % 360}, ${Math.max(s - 10, 20)}%, ${Math.min(l + 10, 70)}%)`;
-  const accent = `hsl(${(h + 180) % 360}, ${Math.min(s + 10, 90)}%, ${l}%)`;
-  const background = `hsl(${h}, ${Math.max(s - 60, 5)}%, 98%)`;
-  const text = `hsl(${h}, ${Math.max(s - 50, 10)}%, 15%)`;
-
-  return {
-    primaryColor: primaryHsl,
-    secondaryColor: secondary,
-    accentColor: accent,
-    backgroundColor: background,
-    textColor: text,
-  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "relative flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all",
+        "hover:bg-muted/50",
+        isSelected
+          ? "border-primary ring-2 ring-primary/20"
+          : "border-border"
+      )}
+    >
+      <div
+        className="w-8 h-8 rounded-full shadow-sm"
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-xs text-muted-foreground">{preset.name}</span>
+    </button>
+  );
 }
 
-function ColorRow({
-  label,
-  value,
-  onChange,
+function CustomThemeSwatch({
+  customColor,
+  isSelected,
+  onColorChange,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
+  customColor: string | null;
+  isSelected: boolean;
+  onColorChange: (color: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-sm text-muted-foreground">{label}</label>
-      <ColorPicker color={value} onChange={onChange} />
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "relative flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all",
+            "hover:bg-muted/50",
+            isSelected
+              ? "border-primary ring-2 ring-primary/20"
+              : "border-border"
+          )}
+        >
+          {customColor ? (
+            <div
+              className="w-8 h-8 rounded-full shadow-sm"
+              style={{ backgroundColor: customColor }}
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center">
+              <HugeiconsIcon
+                icon={Add01Icon}
+                className="w-4 h-4 text-muted-foreground"
+              />
+            </div>
+          )}
+          <span className="text-xs text-muted-foreground">Custom</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <ColorPicker color={customColor || "#3b82f6"} onChange={onColorChange} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ThemeGrid({
+  selectedThemeId,
+  customColor,
+  onPresetSelect,
+  onCustomColorChange,
+}: {
+  selectedThemeId: string | null;
+  customColor: string | null;
+  onPresetSelect: (themeId: string) => void;
+  onCustomColorChange: (color: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {PRESET_THEMES.map((preset) => (
+        <ThemeSwatch
+          key={preset.id}
+          preset={preset}
+          isSelected={selectedThemeId === preset.id}
+          onClick={() => onPresetSelect(preset.id)}
+        />
+      ))}
+      <CustomThemeSwatch
+        customColor={customColor}
+        isSelected={selectedThemeId === "custom"}
+        onColorChange={onCustomColorChange}
+      />
     </div>
   );
 }
 
 export function SettingsPanel({ theme, onThemeChange }: SettingsPanelProps) {
-  const handleGenerateHarmony = () => {
-    const harmonious = generateHarmoniousColors(theme.primaryColor);
-    if (Object.keys(harmonious).length > 0) {
-      onThemeChange(harmonious);
+  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(() => {
+    const matchedPreset = findMatchingPreset(theme.primaryColor);
+    return matchedPreset || "custom";
+  });
+  const [customColor, setCustomColor] = useState<string | null>(() => {
+    const matchedPreset = findMatchingPreset(theme.primaryColor);
+    return matchedPreset ? null : theme.primaryColor;
+  });
+
+  const handlePresetSelect = (themeId: string) => {
+    setSelectedThemeId(themeId);
+    const preset = PRESET_THEMES.find((p) => p.id === themeId);
+    if (preset) {
+      const newTheme = generateThemeFromPrimary(
+        preset.hue,
+        preset.saturation,
+        preset.lightness
+      );
+      onThemeChange({ ...newTheme, fontFamily: theme.fontFamily });
+    }
+  };
+
+  const handleCustomColorChange = (color: string) => {
+    setSelectedThemeId("custom");
+    setCustomColor(color);
+
+    const parsed = parseHslString(color);
+    if (parsed) {
+      const newTheme = generateThemeFromPrimary(parsed.h, parsed.s, parsed.l);
+      onThemeChange({ ...newTheme, fontFamily: theme.fontFamily });
     }
   };
 
@@ -106,47 +210,15 @@ export function SettingsPanel({ theme, onThemeChange }: SettingsPanelProps) {
         </div>
       </div>
 
-      {/* Colors */}
+      {/* Theme */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Colors</h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleGenerateHarmony}
-            className="h-7 text-xs"
-          >
-            <HugeiconsIcon icon={SparklesIcon} className="w-3 h-3 mr-1" />
-            Generate
-          </Button>
-        </div>
-        <div className="space-y-3">
-          <ColorRow
-            label="Primary"
-            value={theme.primaryColor}
-            onChange={(value) => onThemeChange({ primaryColor: value })}
-          />
-          <ColorRow
-            label="Secondary"
-            value={theme.secondaryColor}
-            onChange={(value) => onThemeChange({ secondaryColor: value })}
-          />
-          <ColorRow
-            label="Accent"
-            value={theme.accentColor}
-            onChange={(value) => onThemeChange({ accentColor: value })}
-          />
-          <ColorRow
-            label="Background"
-            value={theme.backgroundColor}
-            onChange={(value) => onThemeChange({ backgroundColor: value })}
-          />
-          <ColorRow
-            label="Text"
-            value={theme.textColor}
-            onChange={(value) => onThemeChange({ textColor: value })}
-          />
-        </div>
+        <h3 className="text-sm font-medium">Theme</h3>
+        <ThemeGrid
+          selectedThemeId={selectedThemeId}
+          customColor={customColor}
+          onPresetSelect={handlePresetSelect}
+          onCustomColorChange={handleCustomColorChange}
+        />
       </div>
     </div>
   );
