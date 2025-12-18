@@ -720,11 +720,11 @@ export const generateLandingPageDirect = action({
       throw new Error("AI call limit reached. Please upgrade to Pro.");
     }
 
-    // Check page creation limits
-    const pageCheck = await ctx.runQuery(api.usage.canCreatePage, {});
-    if (!pageCheck.canCreate) {
-      throw new Error("Page limit reached. Please upgrade to Pro.");
-    }
+    // Page limits disabled for development
+    // const pageCheck = await ctx.runQuery(api.usage.canCreatePage, {});
+    // if (!pageCheck.canCreate) {
+    //   throw new Error("Page limit reached. Please upgrade to Pro.");
+    // }
 
     // Create OpenRouter provider
     const openrouter = createOpenRouter({
