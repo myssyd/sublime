@@ -39,10 +39,11 @@ export const createPageWithSections = internalMutation({
       throw new Error("User not found");
     }
 
-    const limits = { free: 3, pro: Infinity };
-    if (user.usage.pagesCreated >= limits[user.plan]) {
-      throw new Error("Page limit reached. Please upgrade to Pro.");
-    }
+    // Page limits disabled for development
+    // const limits = { free: 3, pro: Infinity };
+    // if (user.usage.pagesCreated >= limits[user.plan]) {
+    //   throw new Error("Page limit reached. Please upgrade to Pro.");
+    // }
 
     // Create the landing page
     const pageId = await ctx.db.insert("landingPages", {

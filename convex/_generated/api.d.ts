@@ -14,12 +14,16 @@ import type * as agents_index from "../agents/index.js";
 import type * as agents_mutations from "../agents/mutations.js";
 import type * as agents_threadMutations from "../agents/threadMutations.js";
 import type * as auth from "../auth.js";
+import type * as blocks_actions from "../blocks/actions.js";
 import type * as http from "../http.js";
 import type * as landingPages from "../landingPages.js";
 import type * as media from "../media.js";
+import type * as pageSections from "../pageSections.js";
+import type * as pages from "../pages.js";
 import type * as sections from "../sections.js";
 import type * as usage from "../usage.js";
 import type * as users from "../users.js";
+import type * as websites from "../websites.js";
 
 import type {
   ApiFromModules,
@@ -34,12 +38,16 @@ declare const fullApi: ApiFromModules<{
   "agents/mutations": typeof agents_mutations;
   "agents/threadMutations": typeof agents_threadMutations;
   auth: typeof auth;
+  "blocks/actions": typeof blocks_actions;
   http: typeof http;
   landingPages: typeof landingPages;
   media: typeof media;
+  pageSections: typeof pageSections;
+  pages: typeof pages;
   sections: typeof sections;
   usage: typeof usage;
   users: typeof users;
+  websites: typeof websites;
 }>;
 
 /**
