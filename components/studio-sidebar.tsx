@@ -31,7 +31,7 @@ export function StudioSidebar() {
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[84px] flex-col items-center border-r bg-white/90 py-4 backdrop-blur md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[84px] flex-col items-center border-r bg-background/90 py-4 backdrop-blur md:flex">
         <Link href="/create" aria-label="Sublime home">
           <BrandMark />
         </Link>
@@ -66,7 +66,7 @@ export function StudioSidebar() {
         </button>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t bg-white/95 px-2 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t bg-background/95 px-2 backdrop-blur md:hidden">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
           const Icon = item.icon

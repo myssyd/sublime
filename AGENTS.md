@@ -2,6 +2,7 @@
 
 - Use `bun` and `bunx` for all package, script, and one-off commands.
 - The Next.js app always runs on port **3004**.
+- Theme state uses `next-themes`; pressing unmodified `d` outside editable controls toggles light/dark mode globally.
 - Run `bun run typecheck` and `bun run build` after non-trivial changes.
 - Keep provider secrets in Convex environment variables. Never expose them through `NEXT_PUBLIC_*` variables.
 - Authentication in Convex functions comes from `authComponent.getAuthUser(ctx)`; do not accept a frontend-supplied user ID.

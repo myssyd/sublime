@@ -18,7 +18,7 @@ export default function SettingsPage() {
     <div className="min-h-screen">
       <StudioHeader eyebrow="Workspace" title="Settings" description="Sublime uses isolated provider credentials and storage. Secret values stay in Convex and Vercel." />
       <div className="mx-auto max-w-3xl px-5 py-7 md:px-8 lg:px-10 lg:py-10">
-        <section className="overflow-hidden rounded-2xl border bg-white">
+        <section className="overflow-hidden rounded-2xl border bg-card">
           <div className="border-b px-5 py-4"><h2 className="font-semibold">Provider connections</h2><p className="mt-1 text-xs text-muted-foreground">Configuration status only—keys are never shown in the browser.</p></div>
           <div className="divide-y">
             {providers.map((provider) => {
@@ -35,7 +35,7 @@ export default function SettingsPage() {
             })}
           </div>
         </section>
-        <a href="https://sublime.kiwi" className="mt-5 flex items-center justify-between rounded-xl border bg-white px-5 py-4 text-sm font-medium hover:bg-muted/50">Production domain <span className="flex items-center gap-1 text-xs text-muted-foreground">sublime.kiwi <IconExternalLink className="size-3.5" /></span></a>
+        <a href="https://sublime.kiwi" className="mt-5 flex items-center justify-between rounded-xl border bg-card px-5 py-4 text-sm font-medium hover:bg-muted/50">Production domain <span className="flex items-center gap-1 text-xs text-muted-foreground">sublime.kiwi <IconExternalLink className="size-3.5" /></span></a>
       </div>
     </div>
   )

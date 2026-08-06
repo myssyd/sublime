@@ -15,11 +15,11 @@ export default function LibraryPage() {
         {clones === undefined ? (
           <div className="grid min-h-80 place-items-center"><IconLoader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : clones.length === 0 ? (
-          <div className="grid min-h-96 place-items-center rounded-2xl border border-dashed bg-white/60 p-8 text-center"><div><IconMovie className="mx-auto size-9 text-muted-foreground" /><h2 className="mt-3 font-semibold">No videos yet</h2><p className="mt-1 text-sm text-muted-foreground">Your first clone will appear here as soon as you queue it.</p></div></div>
+          <div className="grid min-h-96 place-items-center rounded-2xl border border-dashed bg-card/60 p-8 text-center"><div><IconMovie className="mx-auto size-9 text-muted-foreground" /><h2 className="mt-3 font-semibold">No videos yet</h2><p className="mt-1 text-sm text-muted-foreground">Your first clone will appear here as soon as you queue it.</p></div></div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {clones.map((clone) => (
-              <article key={clone._id} className="overflow-hidden rounded-2xl border bg-white">
+              <article key={clone._id} className="overflow-hidden rounded-2xl border bg-card">
                 <div className="relative aspect-[9/16] bg-[#171914]">
                   {clone.outputVideoUrl ? (
                     <video src={clone.outputVideoUrl} controls playsInline preload="metadata" className="size-full object-cover" />

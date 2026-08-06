@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --radius: 0.75rem;
   --background: oklch(0.995 0 0);
@@ -21,6 +23,29 @@
   --border: oklch(0.91 0.006 110);
   --input: oklch(0.91 0.006 110);
   --ring: oklch(0.78 0.22 128);
+  --background-glow: oklch(0.97 0.06 128 / 0.32);
+}
+
+.dark {
+  --background: oklch(0.145 0.008 110);
+  --foreground: oklch(0.97 0.005 110);
+  --card: oklch(0.205 0.009 110);
+  --card-foreground: oklch(0.97 0.005 110);
+  --popover: oklch(0.205 0.009 110);
+  --popover-foreground: oklch(0.97 0.005 110);
+  --primary: oklch(0.87 0.255 128);
+  --primary-foreground: oklch(0.18 0.04 128);
+  --secondary: oklch(0.265 0.009 110);
+  --secondary-foreground: oklch(0.96 0.005 110);
+  --muted: oklch(0.24 0.008 110);
+  --muted-foreground: oklch(0.7 0.012 110);
+  --accent: oklch(0.29 0.055 128);
+  --accent-foreground: oklch(0.92 0.12 128);
+  --destructive: oklch(0.7 0.19 25);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.78 0.22 128);
+  --background-glow: oklch(0.48 0.12 128 / 0.2);
 }
 
 @theme inline {
@@ -61,7 +86,7 @@ body {
 
 body {
   background:
-    radial-gradient(circle at 50% -20%, oklch(0.97 0.06 128 / 0.32), transparent 34rem),
+    radial-gradient(circle at 50% -20%, var(--background-glow), transparent 34rem),
     var(--background);
   font-family: var(--font-geist-sans), sans-serif;
 }

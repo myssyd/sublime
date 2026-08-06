@@ -64,7 +64,7 @@ export default function CharactersPage() {
         description="Create reusable AI identities from a strong frontal portrait and supporting angles. Every character is explicitly marked as synthetic."
       />
       <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-7 md:px-8 lg:grid-cols-[400px_minmax(0,1fr)] lg:px-10 lg:py-10">
-        <section className="h-fit rounded-2xl border bg-white p-5 shadow-[0_16px_50px_-35px_rgba(0,0,0,0.35)] sm:p-6 lg:sticky lg:top-6">
+        <section className="h-fit rounded-2xl border bg-card p-5 shadow-[0_16px_50px_-35px_rgba(0,0,0,0.35)] sm:p-6 lg:sticky lg:top-6">
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-xl bg-accent text-accent-foreground"><IconSparkles className="size-5" /></span>
             <div><h2 className="font-semibold">New AI character</h2><p className="text-xs text-muted-foreground">Use consistent, unfiltered references</p></div>
@@ -88,7 +88,7 @@ export default function CharactersPage() {
               <div className="flex items-center justify-between"><span className="text-sm font-medium">Frontal portrait</span><span className="text-xs text-muted-foreground">Required</span></div>
               <input ref={primaryInput} type="file" accept="image/*" className="hidden" onChange={(event) => setPrimary(event.target.files?.[0] ?? null)} />
               <button type="button" onClick={() => primaryInput.current?.click()} className="flex w-full items-center gap-3 rounded-xl border border-dashed bg-muted/25 p-3 text-left hover:border-ring">
-                <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-white shadow-sm">
+                <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-card shadow-sm">
                   {primary ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={URL.createObjectURL(primary)} alt="" className="size-full object-cover" />
@@ -116,7 +116,7 @@ export default function CharactersPage() {
           {characters?.length ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {characters.map((character) => (
-                <article key={character._id} className="group overflow-hidden rounded-2xl border bg-white">
+                <article key={character._id} className="group overflow-hidden rounded-2xl border bg-card">
                   <div className="relative aspect-[4/5] bg-muted">
                     {character.primaryImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -141,7 +141,7 @@ export default function CharactersPage() {
               ))}
             </div>
           ) : (
-            <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed bg-white/60 p-8 text-center"><div><IconRobot className="mx-auto size-8 text-muted-foreground" /><h3 className="mt-3 font-semibold">No characters yet</h3><p className="mt-1 text-sm text-muted-foreground">Your first reusable identity will appear here.</p></div></div>
+            <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed bg-card/60 p-8 text-center"><div><IconRobot className="mx-auto size-8 text-muted-foreground" /><h3 className="mt-3 font-semibold">No characters yet</h3><p className="mt-1 text-sm text-muted-foreground">Your first reusable identity will appear here.</p></div></div>
           )}
         </section>
       </div>

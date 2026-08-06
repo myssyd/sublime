@@ -107,7 +107,7 @@ export default function CreatePage() {
 
       <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-7 md:px-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-10 lg:py-10">
         <section className="min-w-0">
-          <div className="rounded-2xl border bg-white shadow-[0_16px_50px_-35px_rgba(0,0,0,0.35)]">
+          <div className="rounded-2xl border bg-card shadow-[0_16px_50px_-35px_rgba(0,0,0,0.35)]">
             <div className="border-b px-5 py-4 sm:px-6">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <span className="grid size-6 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">1</span>
@@ -151,7 +151,7 @@ export default function CreatePage() {
                             <img src={character.primaryImageUrl} alt="" className="size-full object-cover" />
                           ) : null}
                         </div>
-                        <div className="truncate bg-white px-2.5 py-2 text-xs font-medium">{character.name}</div>
+                        <div className="truncate bg-card px-2.5 py-2 text-xs font-medium">{character.name}</div>
                         {active ? (
                           <span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm">
                             <IconCheck className="size-3.5" stroke={3} />
@@ -201,7 +201,7 @@ export default function CreatePage() {
                   </>
                 ) : (
                   <>
-                    <span className="grid size-12 place-items-center rounded-xl border bg-white shadow-sm transition-transform group-hover:-translate-y-0.5">
+                    <span className="grid size-12 place-items-center rounded-xl border bg-card shadow-sm transition-transform group-hover:-translate-y-0.5">
                       <IconFileUpload className="size-6" stroke={1.7} />
                     </span>
                     <span className="mt-4 text-sm font-semibold">Drop a video here or choose a file</span>
@@ -226,7 +226,7 @@ export default function CreatePage() {
               />
               <label className="flex cursor-pointer items-center justify-between rounded-xl border bg-muted/25 px-4 py-3">
                 <span className="flex items-center gap-3">
-                  <span className="grid size-8 place-items-center rounded-lg bg-white shadow-sm"><IconVolume className="size-4" /></span>
+                  <span className="grid size-8 place-items-center rounded-lg bg-card shadow-sm"><IconVolume className="size-4" /></span>
                   <span>
                     <span className="block text-sm font-medium">Keep original audio</span>
                     <span className="block text-xs text-muted-foreground">Preserve music, speech, and ambient sound</span>
@@ -261,16 +261,16 @@ export default function CreatePage() {
             </div>
             <div className="space-y-3">
               {clones === undefined ? (
-                <div className="grid h-32 place-items-center rounded-xl border bg-white"><IconLoader2 className="size-5 animate-spin text-muted-foreground" /></div>
+                <div className="grid h-32 place-items-center rounded-xl border bg-card"><IconLoader2 className="size-5 animate-spin text-muted-foreground" /></div>
               ) : clones.length === 0 ? (
-                <div className="rounded-xl border bg-white px-6 py-10 text-center">
+                <div className="rounded-xl border bg-card px-6 py-10 text-center">
                   <IconMovie className="mx-auto size-6 text-muted-foreground" />
                   <p className="mt-3 text-sm font-medium">Your cloned videos will appear here</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">Set up the first generation to begin.</p>
                 </div>
               ) : (
                 clones.slice(0, 5).map((clone) => (
-                  <article key={clone._id} className="flex gap-3 rounded-xl border bg-white p-3">
+                  <article key={clone._id} className="flex gap-3 rounded-xl border bg-card p-3">
                     <div className="relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
                       {clone.outputVideoUrl ? (
                         <video src={clone.outputVideoUrl} muted playsInline className="size-full object-cover" />

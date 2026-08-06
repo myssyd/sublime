@@ -58,7 +58,7 @@ function LoginContent() {
           <Button
             size="lg"
             variant="outline"
-            className="mt-8 w-full bg-white"
+            className="mt-8 w-full bg-card"
             onClick={handleGoogle}
             disabled={signingIn || isPending}
           >
