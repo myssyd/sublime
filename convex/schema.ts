@@ -14,6 +14,7 @@ export default defineSchema({
     sourcePrompt: v.optional(v.string()),
     sourceImageKeys: v.optional(v.array(v.string())),
     heroCandidateKeys: v.optional(v.array(v.string())),
+    creationImageKeys: v.optional(v.array(v.string())),
     generationStage: v.optional(
       v.union(v.literal("hero"), v.literal("references"))
     ),

@@ -10,7 +10,9 @@ import {
   IconLink,
   IconLoader2,
   IconMovie,
+  IconPhoto,
   IconPlayerPlayFilled,
+  IconPlus,
   IconSparkles,
   IconVolume,
 } from "@tabler/icons-react"
@@ -20,6 +22,7 @@ import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useAssetUpload } from "@/lib/use-asset-upload"
 import { cn } from "@/lib/utils"
@@ -27,6 +30,8 @@ import { cn } from "@/lib/utils"
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024
 const MIN_VIDEO_SECONDS = 3
 const MAX_VIDEO_SECONDS = 10
+
+type CreateMode = "picture" | "video"
 type ReferenceSource = "upload" | "instagram"
 type FetchedReel = {
   key: string
@@ -37,6 +42,12 @@ type FetchedReel = {
   previewUrl: string
   reused: boolean
 }
+
+const pictureIdeas = [
+  "Golden hour portrait",
+  "Editorial street style",
+  "Minimal studio campaign",
+]
 
 function canonicalInstagramReelUrl(value: string) {
   try {
@@ -75,24 +86,20 @@ function readVideoDuration(file: File) {
   })
 }
 
-function timeAgo(value: number) {
-  const minutes = Math.max(1, Math.round((Date.now() - value) / 60_000))
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.round(hours / 24)}d ago`
-}
-
 export default function CreatePage() {
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
   const createVideo = useAction(api.videoSubmission.createAndQueue)
+  const generatePicture = useAction(api.characterGeneration.generateCreation)
   const importInstagramReel = useAction(api.videoImport.importInstagramReel)
   const uploadAsset = useAssetUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const reelImportAttemptRef = useRef(0)
   const importingReelUrlRef = useRef<string | null>(null)
   const [characterId, setCharacterId] = useState<Id<"characters"> | null>(null)
+  const [createMode, setCreateMode] = useState<CreateMode>("picture")
+  const [picturePrompt, setPicturePrompt] = useState("")
+  const [generatingPicture, setGeneratingPicture] = useState(false)
   const [referenceSource, setReferenceSource] = useState<ReferenceSource>("instagram")
   const [video, setVideo] = useState<File | null>(null)
   const [videoDuration, setVideoDuration] = useState<number | null>(null)
@@ -106,15 +113,18 @@ export default function CreatePage() {
   const [submitting, setSubmitting] = useState(false)
 
   const activeCharacterId = characterId ?? characters?.[0]?._id ?? null
-
   const selectedCharacter = useMemo(
     () => characters?.find((character) => character._id === activeCharacterId),
     [activeCharacterId, characters]
   )
   const selectedCharacterVideos = useMemo(
-    () => videos?.filter((video) => video.characterId === activeCharacterId),
+    () => videos?.filter((item) => item.characterId === activeCharacterId),
     [activeCharacterId, videos]
   )
+  const selectedCharacterPictures = useMemo(() => {
+    if (!selectedCharacter) return []
+    return [...(selectedCharacter.creationImageUrls ?? [])].reverse()
+  }, [selectedCharacter])
   const canonicalReelUrl = canonicalInstagramReelUrl(reelUrl)
   const reelUrlValid = canonicalReelUrl !== null
   const hasReference =
@@ -207,7 +217,28 @@ export default function CreatePage() {
     }
   }
 
-  async function handleGenerate() {
+  async function handleGeneratePicture() {
+    if (!activeCharacterId || !picturePrompt.trim()) return
+    setGeneratingPicture(true)
+    try {
+      await generatePicture({
+        characterId: activeCharacterId,
+        prompt: picturePrompt,
+      })
+      setPicturePrompt("")
+      toast.success("Picture created", {
+        description: `It has been added to ${selectedCharacter?.name ?? "your character"}'s studio.`,
+      })
+    } catch (error) {
+      toast.error("Could not create the picture", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setGeneratingPicture(false)
+    }
+  }
+
+  async function handleGenerateVideo() {
     if (!activeCharacterId || !hasReference) return
     setSubmitting(true)
     try {
@@ -267,329 +298,399 @@ export default function CreatePage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        title="Create"
-        description="Clone a performance with one of your AI characters."
+        eyebrow="Your creative space"
+        title="Studio"
+        description="Choose a character, then create their next picture or video."
       />
 
-      <main className="mx-auto max-w-[1480px] px-5 py-6 md:px-8 lg:px-10 lg:py-8">
+      <main className="w-full px-5 pb-10 md:px-8 lg:px-10">
         {characters === undefined ? (
-          <div className="grid min-h-80 place-items-center text-muted-foreground">
+          <div className="grid min-h-96 place-items-center text-muted-foreground">
             <IconLoader2 className="size-5 animate-spin" />
           </div>
         ) : characters.length === 0 ? (
-          <section className="mx-auto max-w-2xl rounded-2xl border bg-card px-6 py-16 text-center shadow-[0_16px_50px_-35px_rgba(0,0,0,0.35)]">
-            <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/15 text-primary">
+          <section className="mx-auto max-w-2xl rounded-3xl border bg-card px-6 py-16 text-center shadow-[0_20px_60px_-42px_rgba(0,0,0,0.45)]">
+            <span className="mx-auto grid size-16 place-items-center rounded-full bg-primary/15 text-primary">
               <IconSparkles className="size-7" />
             </span>
-            <h2 className="mt-5 text-xl font-semibold">Create a character to get started</h2>
+            <h2 className="mt-5 text-xl font-semibold">Create your first character</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-              Your character is the person who will perform the motion from your source video.
+              Every studio starts with a face. Build an AI character, then come back to create their content.
             </p>
             <Link href="/characters" className={cn(buttonVariants({ size: "lg" }), "mt-6")}>
-              Create your first character <IconArrowRight className="size-4" />
+              Create a character <IconArrowRight className="size-4" />
             </Link>
           </section>
         ) : (
-          <div className="grid items-start gap-6 lg:grid-cols-[400px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)]">
-            <aside className="min-w-0 lg:sticky lg:top-6">
-              <div className="rounded-2xl border bg-card p-5 shadow-[0_16px_50px_-35px_rgba(0,0,0,0.35)] sm:p-6">
-                <div>
-                  <h2 className="text-base font-semibold">Create a video</h2>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Choose who performs, then add the reference motion.
-                  </p>
+          <div className="grid items-start gap-7 lg:grid-cols-[minmax(360px,470px)_minmax(0,1fr)] xl:grid-cols-[480px_minmax(0,1fr)]">
+            <aside className="min-w-0 space-y-5 lg:sticky lg:top-5">
+              <section className="rounded-2xl border bg-card p-4 shadow-[0_20px_60px_-44px_rgba(0,0,0,0.45)] sm:p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-semibold">Your characters</h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">Pick who you want to create with.</p>
+                  </div>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                    {characters.length} {characters.length === 1 ? "character" : "characters"}
+                  </span>
                 </div>
 
-                <div className="mt-5 border-t pt-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Character</p>
-                  <div className="mt-3 flex gap-3 overflow-x-auto pb-1 pt-1" role="group" aria-label="Choose a character">
-                    {characters.map((character) => {
-                      const active = character._id === activeCharacterId
-                      return (
-                        <button
-                          key={character._id}
-                          type="button"
-                          aria-pressed={active}
-                          aria-label={`${active ? "Selected character" : "Select character"}: ${character.name}`}
-                          onClick={() => setCharacterId(character._id)}
-                          className="group w-14 shrink-0 text-center"
+                <div className="mt-4 flex gap-3 overflow-x-auto pb-0.5 pt-1" role="group" aria-label="Choose a character">
+                  {characters.map((character) => {
+                    const active = character._id === activeCharacterId
+                    return (
+                      <button
+                        key={character._id}
+                        type="button"
+                        aria-pressed={active}
+                        aria-label={`${active ? "Selected character" : "Select character"}: ${character.name}`}
+                        onClick={() => setCharacterId(character._id)}
+                        className="group w-14 shrink-0 text-center"
+                      >
+                        <span
+                          className={cn(
+                            "relative mx-auto block size-14 rounded-full bg-gradient-to-tr from-muted-foreground/20 via-border to-muted p-[2px] transition-transform group-hover:scale-[1.03]",
+                            active && "from-primary via-primary to-lime-300 shadow-[0_0_0_4px_var(--card),0_0_0_6px_color-mix(in_oklab,var(--primary)_35%,transparent)]"
+                          )}
                         >
-                          <span
-                            className={cn(
-                              "relative mx-auto block size-12 rounded-full border-2 border-transparent bg-secondary p-0.5 transition-all group-hover:border-foreground/20",
-                              active && "border-primary ring-4 ring-primary/15 group-hover:border-primary"
-                            )}
-                          >
+                          <span className="block size-full overflow-hidden rounded-full bg-secondary p-0.5">
                             {character.primaryImageUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={character.primaryImageUrl} alt={character.name} className="size-full rounded-full object-cover" />
                             ) : null}
-                            {active ? (
-                              <span className="absolute -bottom-0.5 -right-0.5 grid size-4 place-items-center rounded-full border-2 border-card bg-primary text-primary-foreground">
-                                <IconCheck className="size-2.5" stroke={3} />
-                              </span>
-                            ) : null}
                           </span>
-                          <span className={cn("mt-1.5 block truncate text-[11px] text-muted-foreground", active && "font-semibold text-foreground")}>
-                            {character.name}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                          {active ? (
+                            <span className="absolute bottom-0 right-0 grid size-[18px] place-items-center rounded-full border-2 border-card bg-primary text-primary-foreground">
+                              <IconCheck className="size-2.5" stroke={3} />
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className={cn("mt-1.5 block truncate text-[10px] text-muted-foreground", active && "font-semibold text-foreground")}>
+                          {character.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+
+                  <Link href="/characters" className="group w-14 shrink-0 text-center" aria-label="Create a new character">
+                    <span className="mx-auto grid size-14 place-items-center rounded-full border border-dashed border-muted-foreground/45 bg-muted/35 text-muted-foreground transition-colors group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary">
+                      <IconPlus className="size-5" stroke={1.8} />
+                    </span>
+                    <span className="mt-1.5 block text-[10px] font-medium text-muted-foreground group-hover:text-foreground">New</span>
+                  </Link>
                 </div>
+              </section>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/mp4,video/quicktime,.mp4,.mov"
-                  className="hidden"
-                  onChange={(event) => void chooseVideo(event.target.files?.[0])}
-                />
-
-                <div className="mt-5 border-t pt-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <label htmlFor="reel-url" className="flex items-center gap-2 text-sm font-semibold">
-                      <IconMovie className="size-4 text-muted-foreground" /> Source video
-                    </label>
-                    {referenceSource === "upload" && video ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setReferenceSource("instagram")
-                          setVideo(null)
-                          setVideoDuration(null)
-                          setVideoPreviewUrl(null)
-                          if (fileInputRef.current) fileInputRef.current.value = ""
-                          if (canonicalReelUrl) void importReel(canonicalReelUrl)
-                        }}
-                      >
-                        <IconLink className="size-4" /> Use link
-                      </Button>
-                    ) : (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
-                        <IconFileUpload className="size-4" /> Upload
-                      </Button>
-                    )}
-                  </div>
-
-                  {referenceSource === "upload" && video ? (
-                    <div className="mt-3 overflow-hidden rounded-xl border bg-muted/20">
-                      {videoPreviewUrl ? (
-                        <video
-                          key={videoPreviewUrl}
-                          src={videoPreviewUrl}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          className="max-h-52 w-full bg-black object-contain"
-                        />
-                      ) : null}
-                      <div className="min-w-0 px-3 py-2.5">
-                        <p className="truncate text-xs font-medium">{video.name}</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {videoDuration?.toFixed(1)} sec · {(video.size / 1024 / 1024).toFixed(1)} MB
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="relative mt-3">
-                        <IconLink className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="reel-url"
-                          type="url"
-                          inputMode="url"
-                          autoComplete="off"
-                          value={reelUrl}
-                          onChange={(event) => updateReelUrl(event.target.value)}
-                          onBlur={() => {
-                            if (canonicalReelUrl) setReelUrl(canonicalReelUrl)
-                          }}
-                          placeholder="Paste an Instagram Reel link"
-                          aria-invalid={Boolean(reelError) || (reelUrl.trim().length > 0 && !reelUrlValid)}
-                          aria-describedby="reel-status"
-                          className={cn(
-                            "h-11 pl-10 pr-10",
-                            (reelError || (reelUrl.trim().length > 0 && !reelUrlValid)) &&
-                              "border-destructive focus:border-destructive focus:ring-destructive/20"
-                          )}
-                        />
-                        {fetchingReel ? (
-                          <IconLoader2 className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                        ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
-                          <span className="pointer-events-none absolute right-3 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded-full bg-primary text-primary-foreground">
-                            <IconCheck className="size-3" stroke={3} />
-                          </span>
-                        ) : null}
-                      </div>
-                      <div id="reel-status" aria-live="polite" className="mt-2 min-h-5">
-                        {fetchingReel ? (
-                          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <IconLoader2 className="size-3.5 animate-spin" /> Loading video…
-                          </p>
-                        ) : reelError ? (
-                          <p className="text-xs text-destructive">Couldn’t load this Reel. Check that it’s public and 3–10 seconds long.</p>
-                        ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
-                          <p className="flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400">
-                            <IconCheck className="size-3.5" /> Video ready · {fetchedReel.durationSeconds.toFixed(1)} sec
-                          </p>
-                        ) : reelUrl.trim().length > 0 && !reelUrlValid ? (
-                          <p className="text-xs text-destructive">Paste a link like instagram.com/reel/…</p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">Loads automatically · public Reels · 3–10 sec</p>
-                        )}
-                      </div>
-                      {fetchedReel?.sourceUrl === canonicalReelUrl ? (
-                        <video
-                          key={fetchedReel.previewUrl}
-                          src={fetchedReel.previewUrl}
-                          controls
-                          playsInline
-                          preload="metadata"
-                          className="mt-2 max-h-48 w-full rounded-xl bg-black object-contain"
-                        />
-                      ) : null}
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-5 border-t pt-5">
-                  <label htmlFor="direction" className="text-sm font-semibold">Direction <span className="font-normal text-muted-foreground">· optional</span></label>
-                  <Textarea
-                    id="direction"
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    placeholder="Keep the outfit, change the lighting, add wind…"
-                    className="mt-3 min-h-24"
-                  />
-                </div>
-
-                <div className="mt-4 flex items-center justify-between rounded-xl bg-muted/35 px-3.5 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <IconVolume className="size-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs font-medium">Keep original audio</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">Music, speech, and ambience</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={keepAudio}
-                    aria-label="Keep original audio"
-                    onClick={() => setKeepAudio((value) => !value)}
-                    className={cn("relative h-5 w-9 rounded-full bg-muted-foreground/30 transition-colors", keepAudio && "bg-primary")}
-                  >
-                    <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform", keepAudio && "translate-x-4")} />
-                  </button>
-                </div>
-
-                <Button
-                  size="lg"
-                  className="mt-4 w-full text-sm"
-                  onClick={handleGenerate}
-                  disabled={!selectedCharacter || !hasReference || submitting || fetchingReel}
-                >
-                  {submitting ? <IconLoader2 className="size-5 animate-spin" /> : <IconPlayerPlayFilled className="size-4" />}
-                  {submitting
-                    ? referenceSource === "instagram"
-                      ? "Queuing clone…"
-                      : "Uploading & queuing…"
-                    : "Clone performance"}
-                </Button>
-                <p className="mt-2 text-center text-[11px] text-muted-foreground">Kling O3 Pro · usually takes several minutes</p>
-              </div>
-            </aside>
-
-            <section className="min-w-0">
-              <div className="flex flex-col gap-5 rounded-2xl border bg-card px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                <div className="flex min-w-0 items-center gap-4">
-                  <span className="size-16 shrink-0 overflow-hidden rounded-full border-2 border-primary bg-secondary p-0.5 ring-4 ring-primary/10">
+              <section className="overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-44px_rgba(0,0,0,0.45)]">
+                <div className="flex items-center gap-4 px-5 py-5 sm:px-6">
+                  <span className="size-[72px] shrink-0 overflow-hidden rounded-full border bg-secondary p-0.5 shadow-sm">
                     {selectedCharacter?.primaryImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={selectedCharacter.primaryImageUrl} alt={selectedCharacter.name} className="size-full rounded-full object-cover" />
                     ) : null}
                   </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-xl font-semibold tracking-tight">{selectedCharacter?.name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">AI character · {selectedCharacterVideos?.length ?? 0} videos</p>
-                  </div>
-                </div>
-                <Link href="/library" className={buttonVariants({ variant: "outline", size: "sm" })}>View library</Link>
-              </div>
-
-              <div className="mt-6 flex items-end justify-between border-b pb-3">
-                <div>
-                  <h2 className="text-base font-semibold">Creations</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">Videos made with {selectedCharacter?.name}</p>
-                </div>
-                {selectedCharacterVideos && selectedCharacterVideos.length > 0 ? (
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                    {selectedCharacterVideos.length} {selectedCharacterVideos.length === 1 ? "video" : "videos"}
-                  </span>
-                ) : null}
-              </div>
-
-              {selectedCharacterVideos === undefined ? (
-                <div className="grid min-h-80 place-items-center text-muted-foreground">
-                  <IconLoader2 className="size-5 animate-spin" />
-                </div>
-              ) : selectedCharacterVideos.length === 0 ? (
-                <div className="mt-5 grid min-h-80 place-items-center rounded-2xl border border-dashed bg-card/60 px-6 text-center">
-                  <div>
-                    <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
-                      <IconMovie className="size-5" />
-                    </span>
-                    <p className="mt-4 text-sm font-medium">No creations yet</p>
-                    <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">
-                      Add a source video on the left to create {selectedCharacter?.name}&apos;s first performance.
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="truncate text-lg font-semibold tracking-tight">{selectedCharacter?.name}</h2>
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-lime-800 dark:text-lime-300">Selected</span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">AI character</p>
+                    <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+                      {selectedCharacterPictures.length} photos <span className="mx-1.5 text-border">•</span> {selectedCharacterVideos?.length ?? 0} videos
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-3 xl:gap-4">
-                  {selectedCharacterVideos.map((generatedVideo) => (
-                    <article key={generatedVideo._id} className="overflow-hidden rounded-xl border bg-card">
-                      <div className="relative aspect-[4/5] bg-muted">
-                        {generatedVideo.outputVideoUrl ? (
-                          <video
-                            src={generatedVideo.outputVideoUrl}
-                            controls
-                            playsInline
-                            preload="metadata"
-                            aria-label={`${generatedVideo.characterName} generated video`}
-                            className="size-full bg-black object-contain"
-                          />
-                        ) : generatedVideo.characterImageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={generatedVideo.characterImageUrl} alt="" className="size-full object-cover opacity-55" />
-                        ) : null}
-                        {(generatedVideo.status === "processing" || generatedVideo.status === "queued") ? (
-                          <div className="absolute inset-0 grid place-items-center bg-black/25">
-                            <IconLoader2 className="size-6 animate-spin text-white" />
-                          </div>
-                        ) : null}
+
+                <Tabs
+                  value={createMode}
+                  onValueChange={(value) => setCreateMode(value as CreateMode)}
+                  className="border-t"
+                >
+                  <div className="px-5 pt-5 sm:px-6">
+                    <TabsList aria-label="Creation type">
+                      <TabsTrigger value="picture"><IconPhoto className="size-4" /> Picture</TabsTrigger>
+                      <TabsTrigger value="video"><IconMovie className="size-4" /> Video</TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  <TabsContent value="picture" className="p-5 pt-4 sm:p-6 sm:pt-4">
+                    <div>
+                      <h3 className="text-base font-semibold">Create a picture</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Describe the scene. {selectedCharacter?.name}&apos;s identity stays locked.
+                      </p>
+                    </div>
+                    <label htmlFor="picture-direction" className="mt-5 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Creative direction
+                    </label>
+                    <Textarea
+                      id="picture-direction"
+                      value={picturePrompt}
+                      onChange={(event) => setPicturePrompt(event.target.value)}
+                      placeholder={`Put ${selectedCharacter?.name ?? "the character"} in a sunlit café, candid expression, warm editorial photography…`}
+                      className="mt-2 min-h-32 resize-none"
+                    />
+                    <div className="mt-3 flex flex-wrap gap-2" aria-label="Picture ideas">
+                      {pictureIdeas.map((idea) => (
+                        <button
+                          key={idea}
+                          type="button"
+                          onClick={() => setPicturePrompt(idea)}
+                          className="rounded-full border bg-background px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                        >
+                          {idea}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-5 flex items-center gap-3 rounded-2xl bg-muted/45 px-3.5 py-3">
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-lime-800 dark:text-lime-300">
+                        <IconSparkles className="size-4" />
+                      </span>
+                      <div>
+                        <p className="text-xs font-medium">Portrait format · 4:5</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Optimized for a social feed.</p>
                       </div>
-                      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                        <div>
-                          <p className="text-[11px] font-medium capitalize">{generatedVideo.status}</p>
-                          {generatedVideo.sourceDurationSeconds !== undefined ? (
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">{generatedVideo.sourceDurationSeconds.toFixed(1)} sec reference</p>
+                    </div>
+                    <Button
+                      size="lg"
+                      className="mt-4 w-full text-sm"
+                      onClick={handleGeneratePicture}
+                      disabled={!selectedCharacter || picturePrompt.trim().length < 3 || generatingPicture}
+                    >
+                      {generatingPicture ? <IconLoader2 className="size-5 animate-spin" /> : <IconSparkles className="size-4" />}
+                      {generatingPicture ? "Creating picture…" : "Create picture"}
+                    </Button>
+                    <p className="mt-2 text-center text-[11px] text-muted-foreground">Seedream · usually takes about a minute</p>
+                  </TabsContent>
+
+                  <TabsContent value="video" className="p-5 pt-4 sm:p-6 sm:pt-4">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="video/mp4,video/quicktime,.mp4,.mov"
+                      className="hidden"
+                      onChange={(event) => void chooseVideo(event.target.files?.[0])}
+                    />
+                    <div>
+                      <h3 className="text-base font-semibold">Create a video</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Add a short performance for {selectedCharacter?.name} to recreate.</p>
+                    </div>
+
+                    <div className="mt-5 border-t pt-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <label htmlFor="reel-url" className="flex items-center gap-2 text-sm font-semibold">
+                          <IconMovie className="size-4 text-muted-foreground" /> Source video
+                        </label>
+                        {referenceSource === "upload" && video ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setReferenceSource("instagram")
+                              setVideo(null)
+                              setVideoDuration(null)
+                              setVideoPreviewUrl(null)
+                              if (fileInputRef.current) fileInputRef.current.value = ""
+                              if (canonicalReelUrl) void importReel(canonicalReelUrl)
+                            }}
+                          >
+                            <IconLink className="size-4" /> Use link
+                          </Button>
+                        ) : (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+                            <IconFileUpload className="size-4" /> Upload
+                          </Button>
+                        )}
+                      </div>
+
+                      {referenceSource === "upload" && video ? (
+                        <div className="mt-3 overflow-hidden rounded-2xl border bg-muted/20">
+                          {videoPreviewUrl ? (
+                            <video key={videoPreviewUrl} src={videoPreviewUrl} controls playsInline preload="metadata" className="max-h-52 w-full bg-black object-contain" />
                           ) : null}
+                          <div className="min-w-0 px-3 py-2.5">
+                            <p className="truncate text-xs font-medium">{video.name}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{videoDuration?.toFixed(1)} sec · {(video.size / 1024 / 1024).toFixed(1)} MB</p>
+                          </div>
                         </div>
-                        <span className="text-[10px] text-muted-foreground">{timeAgo(generatedVideo.createdAt)}</span>
+                      ) : (
+                        <>
+                          <div className="relative mt-3">
+                            <IconLink className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="reel-url"
+                              type="url"
+                              inputMode="url"
+                              autoComplete="off"
+                              value={reelUrl}
+                              onChange={(event) => updateReelUrl(event.target.value)}
+                              onBlur={() => {
+                                if (canonicalReelUrl) setReelUrl(canonicalReelUrl)
+                              }}
+                              placeholder="Paste an Instagram Reel link"
+                              aria-invalid={Boolean(reelError) || (reelUrl.trim().length > 0 && !reelUrlValid)}
+                              aria-describedby="reel-status"
+                              className={cn(
+                                "h-11 rounded-xl pl-10 pr-10",
+                                (reelError || (reelUrl.trim().length > 0 && !reelUrlValid)) && "border-destructive focus:border-destructive focus:ring-destructive/20"
+                              )}
+                            />
+                            {fetchingReel ? (
+                              <IconLoader2 className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                            ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                              <span className="pointer-events-none absolute right-3 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded-full bg-primary text-primary-foreground">
+                                <IconCheck className="size-3" stroke={3} />
+                              </span>
+                            ) : null}
+                          </div>
+                          <div id="reel-status" aria-live="polite" className="mt-2 min-h-5">
+                            {fetchingReel ? (
+                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><IconLoader2 className="size-3.5 animate-spin" /> Loading video…</p>
+                            ) : reelError ? (
+                              <p className="text-xs text-destructive">Couldn&apos;t load this Reel. Check that it&apos;s public and 3–10 seconds long.</p>
+                            ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                              <p className="flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400"><IconCheck className="size-3.5" /> Video ready · {fetchedReel.durationSeconds.toFixed(1)} sec</p>
+                            ) : reelUrl.trim().length > 0 && !reelUrlValid ? (
+                              <p className="text-xs text-destructive">Paste a link like instagram.com/reel/…</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Loads automatically · public Reels · 3–10 sec</p>
+                            )}
+                          </div>
+                          {fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                            <video key={fetchedReel.previewUrl} src={fetchedReel.previewUrl} controls playsInline preload="metadata" className="mt-2 max-h-48 w-full rounded-2xl bg-black object-contain" />
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+
+                    <div className="mt-5 border-t pt-5">
+                      <label htmlFor="direction" className="text-sm font-semibold">Direction <span className="font-normal text-muted-foreground">· optional</span></label>
+                      <Textarea id="direction" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Keep the outfit, change the lighting, add wind…" className="mt-3 min-h-24 resize-none" />
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between rounded-2xl bg-muted/45 px-3.5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <IconVolume className="size-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs font-medium">Keep original audio</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">Music, speech, and ambience</p>
+                        </div>
                       </div>
-                    </article>
-                  ))}
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={keepAudio}
+                        aria-label="Keep original audio"
+                        onClick={() => setKeepAudio((value) => !value)}
+                        className={cn("relative h-5 w-9 rounded-full bg-muted-foreground/30 transition-colors", keepAudio && "bg-primary")}
+                      >
+                        <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform", keepAudio && "translate-x-4")} />
+                      </button>
+                    </div>
+
+                    <Button size="lg" className="mt-4 w-full text-sm" onClick={handleGenerateVideo} disabled={!selectedCharacter || !hasReference || submitting || fetchingReel}>
+                      {submitting ? <IconLoader2 className="size-5 animate-spin" /> : <IconPlayerPlayFilled className="size-4" />}
+                      {submitting ? (referenceSource === "instagram" ? "Queuing clone…" : "Uploading & queuing…") : "Create video"}
+                    </Button>
+                    <p className="mt-2 text-center text-[11px] text-muted-foreground">Kling O3 Pro · usually takes several minutes</p>
+                  </TabsContent>
+                </Tabs>
+              </section>
+            </aside>
+
+            <section className="min-w-0 space-y-6">
+              <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{selectedCharacter?.name}&apos;s studio</p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-tight">Content</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Everything created with this character, in one place.</p>
                 </div>
-              )}
+                <Link href="/library" className={buttonVariants({ variant: "outline", size: "sm" })}>Open full library</Link>
+              </div>
+
+              <section className="overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)]">
+                <div className="flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-9 place-items-center rounded-full bg-primary/15 text-lime-800 dark:text-lime-300"><IconPhoto className="size-4" /></span>
+                    <div>
+                      <h3 className="text-sm font-semibold">Photos</h3>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">Portraits and posts made with {selectedCharacter?.name}</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{selectedCharacterPictures.length}</span>
+                </div>
+
+                {selectedCharacterPictures.length === 0 ? (
+                  <div className="grid min-h-64 place-items-center px-6 text-center">
+                    <div>
+                      <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconPhoto className="size-5" /></span>
+                      <p className="mt-4 text-sm font-medium">No pictures yet</p>
+                      <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Use the Picture tab to create the first post.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3">
+                    {selectedCharacterPictures.map((imageUrl, index) => (
+                      <article key={imageUrl} className="group relative aspect-square overflow-hidden rounded-sm bg-muted">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imageUrl} alt={`${selectedCharacter?.name ?? "Character"} photo ${index + 1}`} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)]">
+                <div className="flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-4" /></span>
+                    <div>
+                      <h3 className="text-sm font-semibold">Videos</h3>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">Performances made with {selectedCharacter?.name}</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{selectedCharacterVideos?.length ?? 0}</span>
+                </div>
+
+                {selectedCharacterVideos === undefined ? (
+                  <div className="grid min-h-64 place-items-center text-muted-foreground"><IconLoader2 className="size-5 animate-spin" /></div>
+                ) : selectedCharacterVideos.length === 0 ? (
+                  <div className="grid min-h-64 place-items-center px-6 text-center">
+                    <div>
+                      <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-5" /></span>
+                      <p className="mt-4 text-sm font-medium">No videos yet</p>
+                      <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Switch to Video and add a Reel or upload to create the first performance.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3">
+                    {selectedCharacterVideos.map((generatedVideo) => (
+                      <article key={generatedVideo._id} className="group min-w-0 overflow-hidden rounded-sm bg-muted">
+                        <div className="relative aspect-square bg-muted">
+                          {generatedVideo.outputVideoUrl ? (
+                            <video src={generatedVideo.outputVideoUrl} controls playsInline preload="metadata" aria-label={`${generatedVideo.characterName} generated video`} className="size-full bg-black object-cover" />
+                          ) : generatedVideo.characterImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={generatedVideo.characterImageUrl} alt="" className="size-full object-cover opacity-55" />
+                          ) : null}
+                          {(generatedVideo.status === "processing" || generatedVideo.status === "queued") ? (
+                            <div className="absolute inset-0 grid place-items-center bg-black/25"><IconLoader2 className="size-6 animate-spin text-white" /></div>
+                          ) : null}
+                          <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium capitalize text-white backdrop-blur-sm">
+                            {generatedVideo.status}
+                          </span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
             </section>
           </div>
         )}
       </main>
-      </div>
+    </div>
   )
 }

@@ -51,6 +51,7 @@ export const list = query({
           ...character,
           primaryImageUrl: publicAssetUrl(character.primaryImageKey),
           referenceImageUrls: assetUrls(character.referenceImageKeys),
+          creationImageUrls: assetUrls(character.creationImageKeys ?? []),
         },
       ]
     })
@@ -279,6 +280,28 @@ export const internalCompleteReferences = internalMutation({
       status: "ready",
       generationStage: undefined,
       generationError: undefined,
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+export const internalAppendCreationImage = internalMutation({
+  args: {
+    id: v.id("characters"),
+    userId: v.string(),
+    imageKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const character = await ctx.db.get(args.id)
+    if (
+      !character ||
+      character.userId !== args.userId ||
+      character.status !== "ready"
+    ) {
+      throw new Error("Character not found")
+    }
+    await ctx.db.patch(args.id, {
+      creationImageKeys: [...(character.creationImageKeys ?? []), args.imageKey],
       updatedAt: Date.now(),
     })
   },

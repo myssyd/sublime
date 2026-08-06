@@ -257,3 +257,75 @@ export const generateReferencePack = action({
     }
   },
 })
+
+export const generateCreation = action({
+  args: {
+    characterId: v.id("characters"),
+    prompt: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ imageKey: string }> => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) throw new Error("Not authenticated")
+    const prompt = args.prompt.trim()
+    if (prompt.length < 3) throw new Error("Describe the picture you want")
+    if (prompt.length > 2_000) throw new Error("Picture direction is too long")
+
+    const character = await ctx.runQuery(internal.characters.internalGetOwned, {
+      id: args.characterId,
+      userId: user._id,
+    })
+    if (
+      !character ||
+      character.status !== "ready" ||
+      !character.primaryImageKey
+    ) {
+      throw new Error("Character not found")
+    }
+
+    configureFal()
+    const startedAt = Date.now()
+    try {
+      const referenceKeys = [
+        character.primaryImageKey,
+        ...character.referenceImageKeys,
+      ]
+      const referenceUrls = await Promise.all(
+        referenceKeys.map((key) => r2.getUrl(key, { expiresIn: 60 * 60 }))
+      )
+      const generated = await generateImage({
+        referenceUrls,
+        prompt: `Create a new photorealistic 4:5 social photo of the EXACT SAME PERSON shown in the supplied identity references. Preserve their recognizable facial identity, facial proportions, skin tone, hair, age, build, and distinctive features exactly.
+
+Creative direction: ${prompt}
+
+Make the result feel like a polished, believable Instagram post with natural photographic detail and intentional composition. One person only unless the creative direction explicitly asks otherwise. No text, lettering, watermark, border, duplicate face, distorted anatomy, or identity drift.`,
+      })
+      const imageKey = await storeGeneratedImage(
+        ctx,
+        generated.blob,
+        `users/${user._id}/characters/${args.characterId}/creations/${crypto.randomUUID()}.jpg`
+      )
+      await ctx.runMutation(internal.characters.internalAppendCreationImage, {
+        id: args.characterId,
+        userId: user._id,
+        imageKey,
+      })
+      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
+        userId: user._id,
+        model: generated.model,
+        status: "completed",
+        providerRequestId: generated.requestId,
+        elapsedMs: Date.now() - startedAt,
+      })
+      return { imageKey }
+    } catch (error) {
+      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
+        userId: user._id,
+        model: SEEDREAM_EDIT_MODEL,
+        status: "failed",
+        elapsedMs: Date.now() - startedAt,
+      })
+      throw error
+    }
+  },
+})
