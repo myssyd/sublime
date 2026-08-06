@@ -21,11 +21,11 @@ function errorMessage(error: unknown) {
 }
 
 export const generateClone = internalAction({
-  args: { cloneId: v.id("videoClones") },
+  args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
     const startedAt = Date.now()
-    await ctx.runMutation(internal.videoClones.internalSetProcessing, {
-      cloneId: args.cloneId,
+    await ctx.runMutation(internal.videos.internalSetProcessing, {
+      videoId: args.videoId,
     })
 
     try {
@@ -33,13 +33,13 @@ export const generateClone = internalAction({
       if (!apiKey) throw new Error("FAL_KEY is not configured")
       fal.config({ credentials: apiKey })
 
-      const { clone, character } = await ctx.runQuery(
-        internal.videoClones.internalGetGenerationContext,
-        { cloneId: args.cloneId }
+      const { video, character } = await ctx.runQuery(
+        internal.videos.internalGetGenerationContext,
+        { videoId: args.videoId }
       )
       const [sourceVideoUrl, primaryImageUrl, ...supportingImageUrls] =
         await Promise.all([
-          r2.getUrl(clone.sourceVideoKey, { expiresIn: 60 * 60 }),
+          r2.getUrl(video.sourceVideoKey, { expiresIn: 60 * 60 }),
           r2.getUrl(character.primaryImageKey, { expiresIn: 60 * 60 }),
           ...character.referenceImageKeys.map((key) =>
             r2.getUrl(key, { expiresIn: 60 * 60 })
@@ -52,7 +52,7 @@ export const generateClone = internalAction({
         "Keep @Element1's face, hair, skin tone, body proportions, and wardrobe identity consistent in every frame.",
         "Render photorealistically with stable hands, clean occlusions, natural motion blur, and no identity drift.",
         character.identityPrompt,
-        clone.prompt,
+        video.prompt,
       ]
         .filter(Boolean)
         .join(" ")
@@ -61,7 +61,7 @@ export const generateClone = internalAction({
         input: {
           prompt: direction,
           video_url: sourceVideoUrl,
-          keep_audio: clone.keepAudio,
+          keep_audio: video.keepAudio,
           shot_type: "customize",
           elements: [
             {
@@ -83,21 +83,21 @@ export const generateClone = internalAction({
       }
       const blob = await response.blob()
       const outputVideoKey = await r2.store(ctx, blob, {
-        key: `users/${clone.userId}/clones/${args.cloneId}/${crypto.randomUUID()}.mp4`,
+        key: `users/${video.userId}/videos/${args.videoId}/${crypto.randomUUID()}.mp4`,
         type: blob.type || "video/mp4",
         cacheControl: "public, max-age=31536000, immutable",
       })
 
-      await ctx.runMutation(internal.videoClones.internalComplete, {
-        cloneId: args.cloneId,
+      await ctx.runMutation(internal.videos.internalComplete, {
+        videoId: args.videoId,
         outputVideoKey,
         providerRequestId: result.requestId,
         elapsedMs: Date.now() - startedAt,
       })
     } catch (error) {
       const message = errorMessage(error).slice(0, 1500)
-      await ctx.runMutation(internal.videoClones.internalFail, {
-        cloneId: args.cloneId,
+      await ctx.runMutation(internal.videos.internalFail, {
+        videoId: args.videoId,
         error: message,
         elapsedMs: Date.now() - startedAt,
       })

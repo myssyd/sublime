@@ -14,8 +14,8 @@ import type * as characters from "../characters.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
 import type * as settings from "../settings.js";
-import type * as videoClones from "../videoClones.js";
 import type * as videoGeneration from "../videoGeneration.js";
+import type * as videos from "../videos.js";
 
 import type {
   ApiFromModules,
@@ -30,8 +30,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   jobs: typeof jobs;
   settings: typeof settings;
-  videoClones: typeof videoClones;
   videoGeneration: typeof videoGeneration;
+  videos: typeof videos;
 }>;
 
 /**

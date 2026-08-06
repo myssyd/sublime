@@ -13,7 +13,7 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
-  videoClones: defineTable({
+  videos: defineTable({
     userId: v.string(),
     characterId: v.id("characters"),
     sourceVideoKey: v.string(),

@@ -38,4 +38,4 @@ bunx vercel --prod
 - `/library` tracks queued, generating, completed, and failed clones.
 - `/settings` reports provider and infrastructure readiness.
 
-Generated media is stored in the dedicated `sublime-media` R2 bucket. Convex contains only the product tables `characters`, `videoClones`, and `usage`, plus tables owned internally by mounted components.
+Generated media is stored in the dedicated `sublime-media` R2 bucket. Convex contains only the product tables `characters`, `videos`, and `usage`, plus tables owned internally by mounted components.

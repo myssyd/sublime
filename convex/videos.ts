@@ -15,23 +15,23 @@ export const list = query({
   handler: async (ctx) => {
     const user = await authComponent.getAuthUser(ctx)
     if (!user) return []
-    const clones = await ctx.db
-      .query("videoClones")
+    const videos = await ctx.db
+      .query("videos")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .take(40)
     return Promise.all(
-      clones.map(async (clone) => {
-        const character = await ctx.db.get(clone.characterId)
+      videos.map(async (video) => {
+        const character = await ctx.db.get(video.characterId)
         return {
-          ...clone,
+          ...video,
           characterName: character?.name ?? "Deleted character",
           characterImageUrl: character
             ? publicAssetUrl(character.primaryImageKey)
             : null,
-          sourceVideoUrl: publicAssetUrl(clone.sourceVideoKey),
-          outputVideoUrl: clone.outputVideoKey
-            ? publicAssetUrl(clone.outputVideoKey)
+          sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
+          outputVideoUrl: video.outputVideoKey
+            ? publicAssetUrl(video.outputVideoKey)
             : null,
         }
       })
@@ -55,7 +55,7 @@ export const createAndQueue = mutation({
       throw new Error("Character not found")
     }
     const now = Date.now()
-    const cloneId = await ctx.db.insert("videoClones", {
+    const videoId = await ctx.db.insert("videos", {
       userId: user._id,
       characterId: args.characterId,
       sourceVideoKey: args.sourceVideoKey,
@@ -70,28 +70,28 @@ export const createAndQueue = mutation({
     await videoPool.enqueueAction(
       ctx,
       internal.videoGeneration.generateClone,
-      { cloneId },
+      { videoId },
       { retry: false }
     )
-    return cloneId
+    return videoId
   },
 })
 
 export const internalGetGenerationContext = internalQuery({
-  args: { cloneId: v.id("videoClones") },
+  args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
-    const clone = await ctx.db.get(args.cloneId)
-    if (!clone) throw new Error("Video clone not found")
-    const character = await ctx.db.get(clone.characterId)
+    const video = await ctx.db.get(args.videoId)
+    if (!video) throw new Error("Video not found")
+    const character = await ctx.db.get(video.characterId)
     if (!character) throw new Error("Character not found")
-    return { clone, character }
+    return { video, character }
   },
 })
 
 export const internalSetProcessing = internalMutation({
-  args: { cloneId: v.id("videoClones") },
+  args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.cloneId, {
+    await ctx.db.patch(args.videoId, {
       status: "processing",
       error: undefined,
       updatedAt: Date.now(),
@@ -101,22 +101,22 @@ export const internalSetProcessing = internalMutation({
 
 export const internalComplete = internalMutation({
   args: {
-    cloneId: v.id("videoClones"),
+    videoId: v.id("videos"),
     outputVideoKey: v.string(),
     providerRequestId: v.optional(v.string()),
     elapsedMs: v.number(),
   },
   handler: async (ctx, args) => {
-    const clone = await ctx.db.get(args.cloneId)
-    if (!clone) return
-    await ctx.db.patch(args.cloneId, {
+    const video = await ctx.db.get(args.videoId)
+    if (!video) return
+    await ctx.db.patch(args.videoId, {
       status: "completed",
       outputVideoKey: args.outputVideoKey,
       providerRequestId: args.providerRequestId,
       updatedAt: Date.now(),
     })
     await ctx.db.insert("usage", {
-      userId: clone.userId,
+      userId: video.userId,
       operation: "video_clone",
       provider: "fal",
       model: "fal-ai/kling-video/o3/pro/video-to-video/edit",
@@ -130,20 +130,20 @@ export const internalComplete = internalMutation({
 
 export const internalFail = internalMutation({
   args: {
-    cloneId: v.id("videoClones"),
+    videoId: v.id("videos"),
     error: v.string(),
     elapsedMs: v.number(),
   },
   handler: async (ctx, args) => {
-    const clone = await ctx.db.get(args.cloneId)
-    if (!clone) return
-    await ctx.db.patch(args.cloneId, {
+    const video = await ctx.db.get(args.videoId)
+    if (!video) return
+    await ctx.db.patch(args.videoId, {
       status: "failed",
       error: args.error,
       updatedAt: Date.now(),
     })
     await ctx.db.insert("usage", {
-      userId: clone.userId,
+      userId: video.userId,
       operation: "video_clone",
       provider: "fal",
       model: "fal-ai/kling-video/o3/pro/video-to-video/edit",

@@ -35,8 +35,8 @@ function timeAgo(value: number) {
 
 export default function CreatePage() {
   const characters = useQuery(api.characters.list)
-  const clones = useQuery(api.videoClones.list)
-  const createClone = useMutation(api.videoClones.createAndQueue)
+  const videos = useQuery(api.videos.list)
+  const createVideo = useMutation(api.videos.createAndQueue)
   const uploadFile = useUploadFile(api.assets)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [characterId, setCharacterId] = useState<Id<"characters"> | null>(null)
@@ -70,7 +70,7 @@ export default function CreatePage() {
     setSubmitting(true)
     try {
       const sourceVideoKey = await uploadFile(video)
-      await createClone({
+      await createVideo({
         characterId: activeCharacterId,
         sourceVideoKey,
         sourceFileName: video.name,
@@ -260,40 +260,40 @@ export default function CreatePage() {
               <Link href="/library" className="text-xs font-medium text-muted-foreground hover:text-foreground">View all</Link>
             </div>
             <div className="space-y-3">
-              {clones === undefined ? (
+              {videos === undefined ? (
                 <div className="grid h-32 place-items-center rounded-xl border bg-card"><IconLoader2 className="size-5 animate-spin text-muted-foreground" /></div>
-              ) : clones.length === 0 ? (
+              ) : videos.length === 0 ? (
                 <div className="rounded-xl border bg-card px-6 py-10 text-center">
                   <IconMovie className="mx-auto size-6 text-muted-foreground" />
                   <p className="mt-3 text-sm font-medium">Your cloned videos will appear here</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">Set up the first generation to begin.</p>
                 </div>
               ) : (
-                clones.slice(0, 5).map((clone) => (
-                  <article key={clone._id} className="flex gap-3 rounded-xl border bg-card p-3">
+                videos.slice(0, 5).map((video) => (
+                  <article key={video._id} className="flex gap-3 rounded-xl border bg-card p-3">
                     <div className="relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                      {clone.outputVideoUrl ? (
-                        <video src={clone.outputVideoUrl} muted playsInline className="size-full object-cover" />
-                      ) : clone.characterImageUrl ? (
+                      {video.outputVideoUrl ? (
+                        <video src={video.outputVideoUrl} muted playsInline className="size-full object-cover" />
+                      ) : video.characterImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={clone.characterImageUrl} alt="" className="size-full object-cover opacity-70" />
+                        <img src={video.characterImageUrl} alt="" className="size-full object-cover opacity-70" />
                       ) : null}
-                      {clone.status === "processing" || clone.status === "queued" ? (
+                      {video.status === "processing" || video.status === "queued" ? (
                         <div className="absolute inset-0 grid place-items-center bg-black/25"><IconLoader2 className="size-5 animate-spin text-white" /></div>
                       ) : null}
                     </div>
                     <div className="min-w-0 flex-1 py-0.5">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium">{clone.characterName}</p>
+                        <p className="truncate text-sm font-medium">{video.characterName}</p>
                         <span className={cn(
                           "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
-                          clone.status === "completed" && "bg-lime-100 text-lime-800",
-                          clone.status === "failed" && "bg-red-100 text-red-700",
-                          (clone.status === "queued" || clone.status === "processing") && "bg-amber-100 text-amber-700"
-                        )}>{clone.status}</span>
+                          video.status === "completed" && "bg-lime-100 text-lime-800",
+                          video.status === "failed" && "bg-red-100 text-red-700",
+                          (video.status === "queued" || video.status === "processing") && "bg-amber-100 text-amber-700"
+                        )}>{video.status}</span>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{clone.sourceFileName}</p>
-                      <p className="mt-4 text-[11px] text-muted-foreground">{timeAgo(clone.createdAt)}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{video.sourceFileName}</p>
+                      <p className="mt-4 text-[11px] text-muted-foreground">{timeAgo(video.createdAt)}</p>
                     </div>
                   </article>
                 ))
