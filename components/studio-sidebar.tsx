@@ -24,7 +24,7 @@ export function StudioSidebar() {
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[84px] flex-col items-center border-r bg-background/90 py-4 backdrop-blur md:flex">
+      <aside className="fixed inset-y-2 left-2 z-30 hidden w-[72px] flex-col items-center rounded-2xl bg-muted/30 py-3 backdrop-blur md:flex">
         <Link href="/create" aria-label="Sublime home">
           <BrandMark />
         </Link>
@@ -37,13 +37,20 @@ export function StudioSidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex w-full flex-col items-center gap-1 rounded-xl py-2.5 text-[11px] font-medium text-muted-foreground transition-colors",
-                  active
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-muted hover:text-foreground"
+                  "group flex w-full flex-col items-center gap-1 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors",
+                  active ? "text-accent-foreground" : "hover:text-foreground"
                 )}
               >
-                <Icon className="size-5" stroke={active ? 2.2 : 1.7} />
+                <span
+                  className={cn(
+                    "grid size-9 place-items-center rounded-xl transition-colors",
+                    active
+                      ? "bg-accent text-accent-foreground"
+                      : "group-hover:bg-muted group-hover:text-foreground"
+                  )}
+                >
+                  <Icon className="size-5" stroke={active ? 2.2 : 1.7} />
+                </span>
                 {item.label}
               </Link>
             )

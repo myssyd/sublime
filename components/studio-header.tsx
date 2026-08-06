@@ -15,7 +15,7 @@ export function StudioHeader({
   action?: React.ReactNode
 }) {
   return (
-    <header className="flex items-start justify-between gap-6 border-b px-5 py-5 md:px-8 lg:px-10">
+    <header className="flex items-start justify-between gap-6 px-5 py-5 md:px-8 lg:px-10">
       <div className="flex min-w-0 items-start gap-3">
         <BrandMark className="mt-0.5 md:hidden" />
         <div>
