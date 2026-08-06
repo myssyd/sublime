@@ -1,30 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sublime
 
-## Getting Started
+Sublime is an AI character studio for building reusable virtual characters and cloning a reference video's performance with those characters.
 
-First, run the development server:
+## Stack
+
+- Next.js 16, React 19, TypeScript
+- Convex with Better Auth, R2, and Workpool components
+- Kling video-to-video generation through fal.ai
+- Tailwind CSS 4 and shadcn-compatible UI primitives
+- Bun for all package and script commands
+
+## Local development
 
 ```bash
-bun dev
+bun install
+bun run dev:all
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The web app always runs at [http://localhost:3004](http://localhost:3004). `dev:all` starts both Next.js and the Convex development process.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` to `.env.local` and fill in the three public/app variables. Provider, Google OAuth, Better Auth, and R2 secrets run inside Convex and should be configured with `bunx convex env set` rather than committed locally.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Useful commands
 
-## Learn More
+```bash
+bun run typecheck
+bun run lint
+bun run build
+bunx convex deploy
+bunx vercel --prod
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Product areas
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/characters` creates reusable AI-character identities from frontal and supporting reference images.
+- `/create` combines a character with a reference performance and queues a Kling video-to-video clone.
+- `/library` tracks queued, generating, completed, and failed clones.
+- `/settings` reports provider and infrastructure readiness.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Generated media is stored in the dedicated `sublime-media` R2 bucket. Convex contains only the product tables `characters`, `videoClones`, and `usage`, plus tables owned internally by mounted components.

@@ -1,127 +1,49 @@
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
 
 export default defineSchema({
-  // Users (extended by better-auth)
-  users: defineTable({
-    email: v.string(),
-    name: v.optional(v.string()),
-    image: v.optional(v.string()),
-    // Usage tracking
-    usage: v.object({
-      pagesCreated: v.number(),
-      aiCallsThisMonth: v.number(),
-      aiCallsResetAt: v.number(),
-      storageUsedBytes: v.number(),
-    }),
-    plan: v.union(v.literal("free"), v.literal("pro")),
-    createdAt: v.number(),
-  }).index("by_email", ["email"]),
-
-  // Landing Pages
-  landingPages: defineTable({
-    userId: v.id("users"),
+  characters: defineTable({
+    userId: v.string(),
     name: v.string(),
-    businessContext: v.object({
-      name: v.string(),
-      description: v.string(),
-      industry: v.optional(v.string()),
-      targetAudience: v.optional(v.string()),
-      uniqueValue: v.optional(v.string()),
-    }),
-    theme: v.object({
-      primaryColor: v.string(),
-      secondaryColor: v.string(),
-      accentColor: v.string(),
-      backgroundColor: v.string(),
-      textColor: v.string(),
-      fontFamily: v.string(),
-    }),
-    status: v.union(
-      v.literal("generating"),
-      v.literal("draft"),
-      v.literal("published")
-    ),
-    generationThreadId: v.optional(v.id("threads")),
+    identityPrompt: v.string(),
+    primaryImageKey: v.string(),
+    referenceImageKeys: v.array(v.string()),
+    isAiCharacter: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
-  // Smart Sections (AI-determined types)
-  sections: defineTable({
-    landingPageId: v.id("landingPages"),
-    type: v.string(), // "hero", "features", "pricing", etc.
-    templateId: v.optional(v.string()), // e.g., "hero-centered", "hero-gradient"
-    order: v.number(),
-    isVisible: v.boolean(),
-    content: v.any(), // Flexible JSON based on section type
-    styleOverrides: v.optional(
-      v.object({
-        section: v.optional(v.string()), // Tailwind classes for section container
-        elements: v.optional(v.any()), // Record<selector, tailwindClasses>
-      })
-    ),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_page", ["landingPageId"]),
-
-  // Visual Comments (for editing)
-  comments: defineTable({
-    sectionId: v.id("sections"),
-    userId: v.id("users"),
-    position: v.object({
-      x: v.number(),
-      y: v.number(),
-    }),
-    content: v.string(),
-    attachedMedia: v.optional(v.array(v.id("media"))),
-    model: v.optional(v.string()),
+  videoClones: defineTable({
+    userId: v.string(),
+    characterId: v.id("characters"),
+    sourceVideoKey: v.string(),
+    sourceFileName: v.string(),
+    prompt: v.string(),
+    keepAudio: v.boolean(),
+    provider: v.literal("fal-kling-o3-pro"),
     status: v.union(
-      v.literal("draft"),
-      v.literal("pending"),
+      v.literal("queued"),
       v.literal("processing"),
-      v.literal("resolved")
+      v.literal("completed"),
+      v.literal("failed")
     ),
-    aiResponse: v.optional(v.string()),
-    previousContent: v.optional(v.any()),
+    providerRequestId: v.optional(v.string()),
+    outputVideoKey: v.optional(v.string()),
+    error: v.optional(v.string()),
     createdAt: v.number(),
-    resolvedAt: v.optional(v.number()),
+    updatedAt: v.number(),
   })
-    .index("by_section", ["sectionId"])
-    .index("by_status", ["status"]),
+    .index("by_user", ["userId"])
+    .index("by_character", ["characterId"]),
 
-  // Media Library
-  media: defineTable({
-    userId: v.id("users"),
-    storageId: v.id("_storage"),
-    url: v.string(),
-    filename: v.string(),
-    mimeType: v.string(),
-    tags: v.array(v.string()),
-    extractedColors: v.optional(v.array(v.string())),
-    width: v.optional(v.number()),
-    height: v.optional(v.number()),
+  usage: defineTable({
+    userId: v.string(),
+    operation: v.literal("video_clone"),
+    provider: v.literal("fal"),
+    model: v.string(),
+    status: v.union(v.literal("completed"), v.literal("failed")),
+    providerRequestId: v.optional(v.string()),
+    elapsedMs: v.number(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
-
-  // Agent Threads (for @convex-dev/agent)
-  threads: defineTable({
-    userId: v.id("users"),
-    landingPageId: v.optional(v.id("landingPages")),
-    purpose: v.union(v.literal("generation"), v.literal("editing")),
-    createdAt: v.number(),
-  }).index("by_user", ["userId"]),
-
-  // Agent Messages
-  messages: defineTable({
-    threadId: v.id("threads"),
-    role: v.union(
-      v.literal("user"),
-      v.literal("assistant"),
-      v.literal("system")
-    ),
-    content: v.string(),
-    toolCalls: v.optional(v.any()),
-    createdAt: v.number(),
-  }).index("by_thread", ["threadId"]),
-});
+})
