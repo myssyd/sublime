@@ -1,16 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import {
   IconAdjustments,
   IconHomeSpark,
   IconLibraryPhoto,
-  IconLogout,
   IconUsers,
 } from "@tabler/icons-react"
+import { AccountMenu } from "@/components/account-menu"
 import { BrandMark } from "@/components/brand-mark"
-import { signOut } from "@/lib/auth-client"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -22,12 +21,6 @@ const navItems = [
 
 export function StudioSidebar() {
   const pathname = usePathname()
-  const router = useRouter()
-
-  async function handleSignOut() {
-    await signOut()
-    router.replace("/login")
-  }
 
   return (
     <>
@@ -56,14 +49,7 @@ export function StudioSidebar() {
             )
           })}
         </nav>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          className="grid size-10 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label="Sign out"
-        >
-          <IconLogout className="size-5" stroke={1.7} />
-        </button>
+        <AccountMenu placement="sidebar" />
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t bg-background/95 px-2 backdrop-blur md:hidden">

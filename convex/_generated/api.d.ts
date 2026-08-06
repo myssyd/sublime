@@ -10,11 +10,16 @@
 
 import type * as assets from "../assets.js";
 import type * as auth from "../auth.js";
+import type * as characterGeneration from "../characterGeneration.js";
 import type * as characters from "../characters.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
-import type * as settings from "../settings.js";
+import type * as lib_instagram from "../lib/instagram.js";
+import type * as lib_videoValidation from "../lib/videoValidation.js";
 import type * as videoGeneration from "../videoGeneration.js";
+import type * as videoImport from "../videoImport.js";
+import type * as videoSources from "../videoSources.js";
+import type * as videoSubmission from "../videoSubmission.js";
 import type * as videos from "../videos.js";
 
 import type {
@@ -26,11 +31,16 @@ import type {
 declare const fullApi: ApiFromModules<{
   assets: typeof assets;
   auth: typeof auth;
+  characterGeneration: typeof characterGeneration;
   characters: typeof characters;
   http: typeof http;
   jobs: typeof jobs;
-  settings: typeof settings;
+  "lib/instagram": typeof lib_instagram;
+  "lib/videoValidation": typeof lib_videoValidation;
   videoGeneration: typeof videoGeneration;
+  videoImport: typeof videoImport;
+  videoSources: typeof videoSources;
+  videoSubmission: typeof videoSubmission;
   videos: typeof videos;
 }>;
 

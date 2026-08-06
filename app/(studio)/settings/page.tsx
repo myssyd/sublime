@@ -1,41 +1,97 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { IconCheck, IconCircleDashed, IconExternalLink } from "@tabler/icons-react"
-import { api } from "@/convex/_generated/api"
+import { useSyncExternalStore } from "react"
+import {
+  IconDeviceDesktop,
+  IconMoon,
+  IconSun,
+} from "@tabler/icons-react"
+import { useTheme } from "next-themes"
 import { StudioHeader } from "@/components/studio-header"
+import { cn } from "@/lib/utils"
 
-const providers = [
-  { key: "fal" as const, name: "fal.ai", detail: "Kling O3 Pro video cloning" },
-  { key: "openRouter" as const, name: "OpenRouter", detail: "Character analysis and prompt direction" },
-  { key: "r2" as const, name: "Cloudflare R2", detail: "Private source and output assets" },
-  { key: "google" as const, name: "Google OAuth", detail: "Studio sign-in" },
-]
+const themeOptions = [
+  {
+    value: "system",
+    label: "System",
+    description: "Match this device",
+    icon: IconDeviceDesktop,
+  },
+  {
+    value: "light",
+    label: "Light",
+    description: "Always use light mode",
+    icon: IconSun,
+  },
+  {
+    value: "dark",
+    label: "Dark",
+    description: "Always use dark mode",
+    icon: IconMoon,
+  },
+] as const
+
+const subscribeToHydration = () => () => undefined
 
 export default function SettingsPage() {
-  const status = useQuery(api.settings.providerStatus)
+  const { theme, setTheme } = useTheme()
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false
+  )
   return (
     <div className="min-h-screen">
-      <StudioHeader eyebrow="Workspace" title="Settings" description="Sublime uses isolated provider credentials and storage. Secret values stay in Convex and Vercel." />
-      <div className="mx-auto max-w-3xl px-5 py-7 md:px-8 lg:px-10 lg:py-10">
+      <StudioHeader
+        eyebrow="Preferences"
+        title="Settings"
+        description="Manage how Sublime looks and behaves on this device."
+      />
+
+      <div className="mx-auto max-w-3xl space-y-5 px-5 py-7 md:px-8 lg:px-10 lg:py-10">
         <section className="overflow-hidden rounded-2xl border bg-card">
-          <div className="border-b px-5 py-4"><h2 className="font-semibold">Provider connections</h2><p className="mt-1 text-xs text-muted-foreground">Configuration status only—keys are never shown in the browser.</p></div>
-          <div className="divide-y">
-            {providers.map((provider) => {
-              const configured = status?.[provider.key]
+          <div className="border-b px-5 py-4 sm:px-6">
+            <h2 className="font-semibold">Appearance</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Choose how Sublime looks on this device.
+            </p>
+          </div>
+          <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
+            {themeOptions.map((option) => {
+              const Icon = option.icon
+              const selected = mounted && theme === option.value
+
               return (
-                <div key={provider.key} className="flex items-center justify-between gap-5 px-5 py-4">
-                  <div><p className="text-sm font-medium">{provider.name}</p><p className="mt-1 text-xs text-muted-foreground">{provider.detail}</p></div>
-                  <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${configured ? "bg-lime-100 text-lime-800" : "bg-muted text-muted-foreground"}`}>
-                    {configured ? <IconCheck className="size-3.5" stroke={3} /> : <IconCircleDashed className="size-3.5" />}
-                    {configured ? "Connected" : "Pending"}
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setTheme(option.value)}
+                  className={cn(
+                    "rounded-xl border bg-background p-4 text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring",
+                    selected && "border-primary bg-accent/45 ring-1 ring-primary/30"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
+                      selected && "bg-primary text-primary-foreground"
+                    )}
+                  >
+                    <Icon className="size-4.5" stroke={1.8} />
                   </span>
-                </div>
+                  <span className="mt-3 block text-sm font-medium">{option.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {option.description}
+                  </span>
+                </button>
               )
             })}
           </div>
+          <div className="border-t px-5 py-3 text-xs text-muted-foreground sm:px-6">
+            Tip: press <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">D</kbd> anywhere outside a text field to quickly switch light and dark mode.
+          </div>
         </section>
-        <a href="https://sublime.kiwi" className="mt-5 flex items-center justify-between rounded-xl border bg-card px-5 py-4 text-sm font-medium hover:bg-muted/50">Production domain <span className="flex items-center gap-1 text-xs text-muted-foreground">sublime.kiwi <IconExternalLink className="size-3.5" /></span></a>
       </div>
     </div>
   )

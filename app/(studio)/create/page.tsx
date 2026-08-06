@@ -2,12 +2,14 @@
 
 import { useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useMutation, useQuery } from "convex/react"
-import { useUploadFile } from "@convex-dev/r2/react"
+import { useAction, useQuery } from "convex/react"
 import {
   IconArrowRight,
+  IconBrandInstagram,
   IconCheck,
+  IconDownload,
   IconFileUpload,
+  IconLink,
   IconLoader2,
   IconMovie,
   IconPlayerPlayFilled,
@@ -20,10 +22,61 @@ import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { useAssetUpload } from "@/lib/use-asset-upload"
 import { cn } from "@/lib/utils"
 
-const MAX_VIDEO_BYTES = 250 * 1024 * 1024
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024
+const MIN_VIDEO_SECONDS = 3
+const MAX_VIDEO_SECONDS = 10
+type ReferenceSource = "upload" | "instagram"
+type FetchedReel = {
+  key: string
+  fileName: string
+  sourceUrl: string
+  durationSeconds: number
+  fileSize: number
+  previewUrl: string
+  reused: boolean
+}
+
+function canonicalInstagramReelUrl(value: string) {
+  try {
+    const url = new URL(value.trim())
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "")
+    const match = url.pathname.match(/^\/reels?\/([a-zA-Z0-9_-]+)\/?$/)
+    if (
+      url.protocol !== "https:" ||
+      !["instagram.com", "m.instagram.com"].includes(hostname) ||
+      !match
+    ) {
+      return null
+    }
+    return `https://www.instagram.com/reel/${match[1]}/`
+  } catch {
+    return null
+  }
+}
+
+function readVideoDuration(file: File) {
+  return new Promise<number>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const element = document.createElement("video")
+    element.preload = "metadata"
+    element.onloadedmetadata = () => {
+      const duration = element.duration
+      URL.revokeObjectURL(objectUrl)
+      if (Number.isFinite(duration)) resolve(duration)
+      else reject(new Error("Could not read the video duration"))
+    }
+    element.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error("Could not read this video file"))
+    }
+    element.src = objectUrl
+  })
+}
 
 function timeAgo(value: number) {
   const minutes = Math.max(1, Math.round((Date.now() - value) / 60_000))
@@ -36,11 +89,17 @@ function timeAgo(value: number) {
 export default function CreatePage() {
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
-  const createVideo = useMutation(api.videos.createAndQueue)
-  const uploadFile = useUploadFile(api.assets)
+  const createVideo = useAction(api.videoSubmission.createAndQueue)
+  const importInstagramReel = useAction(api.videoImport.importInstagramReel)
+  const uploadAsset = useAssetUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [characterId, setCharacterId] = useState<Id<"characters"> | null>(null)
+  const [referenceSource, setReferenceSource] = useState<ReferenceSource>("upload")
   const [video, setVideo] = useState<File | null>(null)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
+  const [reelUrl, setReelUrl] = useState("")
+  const [fetchedReel, setFetchedReel] = useState<FetchedReel | null>(null)
+  const [fetchingReel, setFetchingReel] = useState(false)
   const [prompt, setPrompt] = useState("")
   const [keepAudio, setKeepAudio] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -51,37 +110,81 @@ export default function CreatePage() {
     () => characters?.find((character) => character._id === activeCharacterId),
     [activeCharacterId, characters]
   )
+  const canonicalReelUrl = canonicalInstagramReelUrl(reelUrl)
+  const reelUrlValid = canonicalReelUrl !== null
+  const hasReference =
+    referenceSource === "upload" ? video !== null : reelUrlValid
 
-  function chooseVideo(file: File | undefined) {
+  async function chooseVideo(file: File | undefined) {
     if (!file) return
-    if (!file.type.startsWith("video/")) {
-      toast.error("Choose a video file")
+    const extension = file.name.split(".").pop()?.toLowerCase()
+    if (!extension || !["mp4", "mov"].includes(extension)) {
+      toast.error("Choose an MP4 or MOV video")
       return
     }
     if (file.size > MAX_VIDEO_BYTES) {
-      toast.error("The reference video must be smaller than 250 MB")
+      toast.error("The reference video must be smaller than 200 MB")
       return
     }
-    setVideo(file)
+    try {
+      const duration = await readVideoDuration(file)
+      if (duration < MIN_VIDEO_SECONDS || duration > MAX_VIDEO_SECONDS) {
+        toast.error("The reference video must be between 3 and 10 seconds")
+        return
+      }
+      setVideo(file)
+      setVideoDuration(duration)
+    } catch (error) {
+      toast.error("Could not use this video", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   async function handleGenerate() {
-    if (!activeCharacterId || !video) return
+    if (!activeCharacterId || !hasReference) return
     setSubmitting(true)
     try {
-      const sourceVideoKey = await uploadFile(video)
+      const groupId = crypto.randomUUID()
+      let sourceVideoKey: string
+      let sourceFileName: string
+      let sourceUrl: string | undefined
+      let reusedSource = false
+
+      if (referenceSource === "upload") {
+        if (!video || videoDuration === null) return
+        sourceVideoKey = await uploadAsset(video, "video-source", groupId)
+        sourceFileName = video.name
+      } else {
+        const imported =
+          fetchedReel?.sourceUrl === canonicalReelUrl
+            ? fetchedReel
+            : await importInstagramReel({ url: reelUrl })
+        sourceVideoKey = imported.key
+        sourceFileName = imported.fileName
+        sourceUrl = imported.sourceUrl
+        reusedSource = imported.reused
+      }
+
       await createVideo({
         characterId: activeCharacterId,
         sourceVideoKey,
-        sourceFileName: video.name,
+        sourceFileName,
+        sourceKind: referenceSource,
+        sourceUrl,
         prompt,
         keepAudio,
       })
       setVideo(null)
+      setVideoDuration(null)
+      setReelUrl("")
+      setFetchedReel(null)
       setPrompt("")
       if (fileInputRef.current) fileInputRef.current.value = ""
       toast.success("Video clone queued", {
-        description: "Kling is reconstructing the performance with your character.",
+        description: reusedSource
+          ? "The existing Reel import was reused. Kling is reconstructing the performance."
+          : "Kling is reconstructing the performance with your character.",
       })
     } catch (error) {
       toast.error("Could not start the clone", {
@@ -89,6 +192,23 @@ export default function CreatePage() {
       })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleFetchReel() {
+    if (!canonicalReelUrl) return
+    setFetchingReel(true)
+    try {
+      const imported = await importInstagramReel({ url: canonicalReelUrl })
+      setReelUrl(imported.sourceUrl)
+      setFetchedReel(imported)
+    } catch (error) {
+      setFetchedReel(null)
+      toast.error("Could not fetch the Reel", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setFetchingReel(false)
     }
   }
 
@@ -167,48 +287,177 @@ export default function CreatePage() {
             <div className="border-t px-5 py-4 sm:px-6">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <span className="grid size-6 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">2</span>
-                Add a reference video
+                Add a source video
               </div>
             </div>
             <div className="p-5 sm:p-6">
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="video/mp4,video/quicktime,video/webm"
+                accept="video/mp4,video/quicktime,.mp4,.mov"
                 className="hidden"
-                onChange={(event) => chooseVideo(event.target.files?.[0])}
+                onChange={(event) => void chooseVideo(event.target.files?.[0])}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  chooseVideo(event.dataTransfer.files?.[0])
-                }}
-                className={cn(
-                  "group flex min-h-52 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/25 px-6 text-center transition-colors hover:border-ring hover:bg-accent/35",
-                  video && "border-solid border-ring bg-accent/20"
-                )}
+              <div
+                role="tablist"
+                aria-label="Source video type"
+                className="mb-4 grid grid-cols-2 rounded-xl bg-muted p-1"
               >
-                {video ? (
-                  <>
-                    <span className="grid size-12 place-items-center rounded-xl bg-[#1b1d17] text-primary">
-                      <IconMovie className="size-6" />
-                    </span>
-                    <span className="mt-4 max-w-full truncate text-sm font-semibold">{video.name}</span>
-                    <span className="mt-1 text-xs text-muted-foreground">{(video.size / 1024 / 1024).toFixed(1)} MB · click to replace</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="grid size-12 place-items-center rounded-xl border bg-card shadow-sm transition-transform group-hover:-translate-y-0.5">
-                      <IconFileUpload className="size-6" stroke={1.7} />
-                    </span>
-                    <span className="mt-4 text-sm font-semibold">Drop a video here or choose a file</span>
-                    <span className="mt-1 text-xs text-muted-foreground">MP4, MOV, or WebM · up to 250 MB</span>
-                  </>
-                )}
-              </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={referenceSource === "upload"}
+                  onClick={() => setReferenceSource("upload")}
+                  className={cn(
+                    "flex h-9 items-center justify-center gap-2 rounded-lg text-sm font-medium text-muted-foreground transition-colors",
+                    referenceSource === "upload" &&
+                      "bg-card text-foreground shadow-sm"
+                  )}
+                >
+                  <IconFileUpload className="size-4" /> Upload file
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={referenceSource === "instagram"}
+                  onClick={() => setReferenceSource("instagram")}
+                  className={cn(
+                    "flex h-9 items-center justify-center gap-2 rounded-lg text-sm font-medium text-muted-foreground transition-colors",
+                    referenceSource === "instagram" &&
+                      "bg-card text-foreground shadow-sm"
+                  )}
+                >
+                  <IconBrandInstagram className="size-4" /> Instagram Reel
+                </button>
+              </div>
+
+              {referenceSource === "upload" ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    void chooseVideo(event.dataTransfer.files?.[0])
+                  }}
+                  className={cn(
+                    "group flex min-h-52 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-muted/25 px-6 text-center transition-colors hover:border-ring hover:bg-accent/35",
+                    video && "border-solid border-ring bg-accent/20"
+                  )}
+                >
+                  {video ? (
+                    <>
+                      <span className="grid size-12 place-items-center rounded-xl bg-[#1b1d17] text-primary">
+                        <IconMovie className="size-6" />
+                      </span>
+                      <span className="mt-4 text-sm font-semibold">Video selected</span>
+                      <span className="mt-1 text-xs text-muted-foreground">
+                        {videoDuration?.toFixed(1)} sec · {(video.size / 1024 / 1024).toFixed(1)} MB · click to replace
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="grid size-12 place-items-center rounded-xl border bg-card shadow-sm transition-transform group-hover:-translate-y-0.5">
+                        <IconFileUpload className="size-6" stroke={1.7} />
+                      </span>
+                      <span className="mt-4 text-sm font-semibold">Drop a video here or choose a file</span>
+                      <span className="mt-1 text-xs text-muted-foreground">MP4 or MOV · 3–10 sec · up to 200 MB</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div role="tabpanel" className="rounded-xl border bg-muted/25 px-5 py-7 sm:px-7 sm:py-9">
+                  <span className="grid size-12 place-items-center rounded-xl bg-gradient-to-br from-fuchsia-500 via-rose-500 to-amber-400 text-white shadow-sm">
+                    <IconBrandInstagram className="size-6" />
+                  </span>
+                  <label htmlFor="reel-url" className="mt-5 block text-sm font-semibold">
+                    Paste a public Reel link
+                  </label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    We’ll remove tracking parameters, verify 3–10 seconds, and only then save it.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <IconLink className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="reel-url"
+                        type="url"
+                        inputMode="url"
+                        value={reelUrl}
+                        onChange={(event) => {
+                          const nextUrl = event.target.value
+                          setReelUrl(nextUrl)
+                          if (
+                            fetchedReel &&
+                            fetchedReel.sourceUrl !== canonicalInstagramReelUrl(nextUrl)
+                          ) {
+                            setFetchedReel(null)
+                          }
+                        }}
+                        onBlur={() => {
+                          if (canonicalReelUrl) setReelUrl(canonicalReelUrl)
+                        }}
+                        placeholder="https://www.instagram.com/reel/…"
+                        aria-invalid={reelUrl.length > 0 && !reelUrlValid}
+                        className={cn(
+                          "h-11 pl-10",
+                          reelUrl.length > 0 && !reelUrlValid && "border-destructive focus:border-destructive focus:ring-destructive/20"
+                        )}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 shrink-0"
+                      disabled={!reelUrlValid || fetchingReel || submitting}
+                      onClick={() => void handleFetchReel()}
+                    >
+                      {fetchingReel ? (
+                        <IconLoader2 className="size-4 animate-spin" />
+                      ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                        <IconCheck className="size-4" />
+                      ) : (
+                        <IconDownload className="size-4" />
+                      )}
+                      {fetchingReel
+                        ? "Fetching…"
+                        : fetchedReel?.sourceUrl === canonicalReelUrl
+                          ? "Fetched"
+                          : "Fetch video"}
+                    </Button>
+                  </div>
+                  {reelUrl.length > 0 ? (
+                    <p className={cn(
+                      "mt-2 flex items-center gap-1.5 text-xs",
+                      reelUrlValid ? "text-lime-600 dark:text-lime-400" : "text-destructive"
+                    )}>
+                      {reelUrlValid ? <IconCheck className="size-3.5" /> : null}
+                      {reelUrlValid ? "Reel link ready to import" : "Enter a link like instagram.com/reel/…"}
+                    </p>
+                  ) : null}
+                  {fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                    <div className="mx-auto mt-5 w-full max-w-sm overflow-hidden rounded-xl border bg-black shadow-sm">
+                      <video
+                        key={fetchedReel.previewUrl}
+                        src={fetchedReel.previewUrl}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="aspect-[9/16] w-full bg-black object-contain"
+                      />
+                      <div className="flex justify-end border-t border-white/10 bg-card px-3 py-2.5 text-xs text-muted-foreground">
+                        <span className="shrink-0">
+                          {fetchedReel.durationSeconds.toFixed(1)} sec ·{" "}
+                          {(fetchedReel.fileSize / 1024 / 1024).toFixed(1)} MB
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="mt-5 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
+                    Public Reels only. Use content you own or have permission to transform.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="border-t px-5 py-4 sm:px-6">
@@ -243,10 +492,19 @@ export default function CreatePage() {
                 size="lg"
                 className="w-full text-[15px]"
                 onClick={handleGenerate}
-                disabled={!selectedCharacter || !video || submitting}
+                disabled={
+                  !selectedCharacter ||
+                  !hasReference ||
+                  submitting ||
+                  fetchingReel
+                }
               >
                 {submitting ? <IconLoader2 className="size-5 animate-spin" /> : <IconPlayerPlayFilled className="size-4" />}
-                {submitting ? "Uploading & queuing…" : "Clone this video"}
+                {submitting
+                  ? referenceSource === "instagram"
+                    ? "Importing Reel & queuing…"
+                    : "Uploading & queuing…"
+                  : "Clone this video"}
               </Button>
               <p className="text-center text-xs text-muted-foreground">High-quality Kling O3 Pro video-to-video · generation can take several minutes</p>
             </div>
@@ -292,7 +550,11 @@ export default function CreatePage() {
                           (video.status === "queued" || video.status === "processing") && "bg-amber-100 text-amber-700"
                         )}>{video.status}</span>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{video.sourceFileName}</p>
+                      {video.sourceDurationSeconds !== undefined ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {video.sourceDurationSeconds.toFixed(1)} sec reference
+                        </p>
+                      ) : null}
                       <p className="mt-4 text-[11px] text-muted-foreground">{timeAgo(video.createdAt)}</p>
                     </div>
                   </article>

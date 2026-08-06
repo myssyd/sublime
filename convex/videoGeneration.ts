@@ -37,6 +37,9 @@ export const generateClone = internalAction({
         internal.videos.internalGetGenerationContext,
         { videoId: args.videoId }
       )
+      if (!character.primaryImageKey) {
+        throw new Error("Character has no approved hero image")
+      }
       const [sourceVideoUrl, primaryImageUrl, ...supportingImageUrls] =
         await Promise.all([
           r2.getUrl(video.sourceVideoKey, { expiresIn: 60 * 60 }),
@@ -82,8 +85,11 @@ export const generateClone = internalAction({
         throw new Error(`Could not download Kling output (${response.status})`)
       }
       const blob = await response.blob()
+      const sourceDirectory = video.sourceVideoKey.match(
+        /^(users\/[^/]+\/videos\/[^/]+)\/source\//
+      )?.[1]
       const outputVideoKey = await r2.store(ctx, blob, {
-        key: `users/${video.userId}/videos/${args.videoId}/${crypto.randomUUID()}.mp4`,
+        key: `${sourceDirectory ?? `users/${video.userId}/videos/${args.videoId}`}/output/${crypto.randomUUID()}.mp4`,
         type: blob.type || "video/mp4",
         cacheControl: "public, max-age=31536000, immutable",
       })

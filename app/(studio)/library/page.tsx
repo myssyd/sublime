@@ -31,7 +31,7 @@ export default function LibraryPage() {
                     <div className="absolute inset-0 grid place-items-center bg-black/25 text-white"><div className="text-center">{video.status === "failed" ? <IconAlertTriangle className="mx-auto size-7 text-red-300" /> : <IconLoader2 className="mx-auto size-7 animate-spin" />}<p className="mt-3 text-xs font-semibold uppercase tracking-wider">{video.status}</p></div></div>
                   ) : null}
                 </div>
-                <div className="p-4"><div className="flex items-center justify-between gap-3"><h2 className="truncate text-sm font-semibold">{video.characterName}</h2><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Kling O3</span></div><p className="mt-1 truncate text-xs text-muted-foreground">{video.sourceFileName}</p>{video.error ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-red-600">{video.error}</p> : null}</div>
+                <div className="p-4"><div className="flex items-center justify-between gap-3"><h2 className="truncate text-sm font-semibold">{video.characterName}</h2><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Kling O3</span></div>{video.error ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-red-600">{video.error}</p> : null}</div>
               </article>
             ))}
           </div>

@@ -6,7 +6,6 @@ import { internal } from "./_generated/api"
 import {
   internalMutation,
   internalQuery,
-  mutation,
   query,
 } from "./_generated/server"
 
@@ -26,7 +25,7 @@ export const list = query({
         return {
           ...video,
           characterName: character?.name ?? "Deleted character",
-          characterImageUrl: character
+          characterImageUrl: character?.primaryImageKey
             ? publicAssetUrl(character.primaryImageKey)
             : null,
           sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
@@ -39,27 +38,48 @@ export const list = query({
   },
 })
 
-export const createAndQueue = mutation({
+export const internalCreateAndQueue = internalMutation({
   args: {
+    userId: v.string(),
     characterId: v.id("characters"),
     sourceVideoKey: v.string(),
     sourceFileName: v.string(),
+    sourceKind: v.union(v.literal("upload"), v.literal("instagram")),
+    sourceUrl: v.optional(v.string()),
+    sourceDurationSeconds: v.number(),
+    sourceFileSize: v.number(),
     prompt: v.string(),
     keepAudio: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const user = await authComponent.getAuthUser(ctx)
-    if (!user) throw new Error("Not authenticated")
     const character = await ctx.db.get(args.characterId)
-    if (!character || character.userId !== user._id) {
+    if (
+      !character ||
+      character.userId !== args.userId ||
+      character.status === "draft" ||
+      !character.primaryImageKey
+    ) {
       throw new Error("Character not found")
+    }
+    if (
+      args.sourceDurationSeconds < 3 ||
+      args.sourceDurationSeconds > 10
+    ) {
+      throw new Error("Reference videos must be between 3 and 10 seconds")
+    }
+    if (args.sourceFileSize > 200 * 1024 * 1024) {
+      throw new Error("Reference videos must be smaller than 200 MB")
     }
     const now = Date.now()
     const videoId = await ctx.db.insert("videos", {
-      userId: user._id,
+      userId: args.userId,
       characterId: args.characterId,
       sourceVideoKey: args.sourceVideoKey,
       sourceFileName: args.sourceFileName,
+      sourceKind: args.sourceKind,
+      sourceUrl: args.sourceUrl,
+      sourceDurationSeconds: args.sourceDurationSeconds,
+      sourceFileSize: args.sourceFileSize,
       prompt: args.prompt.trim(),
       keepAudio: args.keepAudio,
       provider: "fal-kling-o3-pro",

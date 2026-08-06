@@ -1,7 +1,7 @@
 "use client"
 
+import { AccountMenu } from "@/components/account-menu"
 import { BrandMark } from "@/components/brand-mark"
-import { useSession } from "@/lib/auth-client"
 
 export function StudioHeader({
   eyebrow,
@@ -14,8 +14,6 @@ export function StudioHeader({
   description: string
   action?: React.ReactNode
 }) {
-  const { data: session } = useSession()
-
   return (
     <header className="flex items-start justify-between gap-6 border-b px-5 py-5 md:px-8 lg:px-10">
       <div className="flex min-w-0 items-start gap-3">
@@ -34,19 +32,9 @@ export function StudioHeader({
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {action}
-        {session?.user ? (
-          <div
-            className="hidden size-9 place-items-center overflow-hidden rounded-full border bg-muted text-xs font-semibold sm:grid"
-            title={session.user.email}
-          >
-            {session.user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={session.user.image} alt="" className="size-full object-cover" />
-            ) : (
-              session.user.name?.slice(0, 1).toUpperCase() ?? "S"
-            )}
-          </div>
-        ) : null}
+        <div className="md:hidden">
+          <AccountMenu placement="header" />
+        </div>
       </div>
     </header>
   )

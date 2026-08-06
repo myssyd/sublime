@@ -1,0 +1,45 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sublime-cobalt",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "containers": [
+    {
+      "class_name": "CobaltContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "basic"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COBALT",
+        "class_name": "CobaltContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CobaltContainer"]
+    }
+  ],
+  "vars": {
+    "COBALT_PUBLIC_URL": "https://cobalt.sublime.kiwi/"
+  },
+  "secrets": {
+    "required": ["COBALT_API_KEY"]
+  },
+  "routes": [
+    {
+      "pattern": "cobalt.sublime.kiwi",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
