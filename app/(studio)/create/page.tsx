@@ -15,7 +15,6 @@ import {
   IconPaperclip,
   IconPhoto,
   IconPlus,
-  IconSparkles,
   IconVolume,
   IconX,
 } from "@tabler/icons-react"
@@ -23,6 +22,7 @@ import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
+import { CharacterEmptyState } from "@/components/character-empty-state"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Select,
@@ -677,18 +677,15 @@ export default function CreatePage() {
             <IconLoader2 className="size-5 animate-spin" />
           </div>
         ) : characters.length === 0 ? (
-          <section className="mx-auto max-w-2xl rounded-3xl border bg-card px-6 py-16 text-center shadow-[0_20px_60px_-42px_rgba(0,0,0,0.45)]">
-            <span className="mx-auto grid size-16 place-items-center rounded-full bg-primary/15 text-primary">
-              <IconSparkles className="size-7" />
-            </span>
-            <h2 className="mt-5 text-xl font-semibold">Create your first character</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-              Every studio starts with a face. Build an AI character, then come back to create their content.
-            </p>
-            <Link href="/characters" className={cn(buttonVariants({ size: "lg" }), "mt-6")}>
-              Create a character <IconArrowRight className="size-4" />
-            </Link>
-          </section>
+          <CharacterEmptyState
+            title="Create your first character"
+            description="Every studio starts with a face. Build an AI character, then come back to create their content."
+            action={
+              <Link href="/characters" className={buttonVariants()}>
+                Create a character <IconArrowRight className="size-4" />
+              </Link>
+            }
+          />
         ) : (
           <div className="grid items-start gap-7 lg:grid-cols-[minmax(360px,470px)_minmax(0,1fr)] xl:grid-cols-[480px_minmax(0,1fr)]">
             <aside className="min-w-0 space-y-3 lg:sticky lg:top-5">
@@ -1086,8 +1083,8 @@ export default function CreatePage() {
                     </div>
 
                     <div className="mt-10">
-                      <label htmlFor="direction" className="text-sm font-semibold">Direction <span className="font-normal text-muted-foreground">· optional</span></label>
-                      <Textarea id="direction" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Keep the outfit, change the lighting, add wind…" className="mt-3 min-h-24 resize-none" />
+                      <label htmlFor="video-prompt" className="text-sm font-semibold">Prompt <span className="font-normal text-muted-foreground">· optional</span></label>
+                      <Textarea id="video-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Keep the outfit, change the lighting, add wind…" className="mt-3 min-h-24 resize-none" />
                     </div>
 
                     <div className="mt-4 flex items-center justify-between rounded-2xl bg-muted/45 px-3.5 py-3">

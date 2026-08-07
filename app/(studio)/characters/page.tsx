@@ -14,12 +14,12 @@ import {
   IconRefresh,
   IconSparkles,
   IconTextCaption,
-  IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
+import { CharacterEmptyState } from "@/components/character-empty-state"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -301,7 +301,7 @@ export default function CharactersPage() {
         title="Characters"
         description="Build reusable, Kling-ready identities with Seedream-generated portrait and full-body references."
         action={
-          !showBuilder ? (
+          !showBuilder && (Boolean(draft) || Boolean(characters?.length)) ? (
             <Button
               size="sm"
               onClick={() => {
@@ -750,20 +750,22 @@ export default function CharactersPage() {
 
         {!showBuilder ? (
           <section className="animate-in duration-200 fade-in motion-reduce:animate-none">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold">Your characters</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Approved identity packs ready for video cloning.
-                </p>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {characters?.length ?? 0} total
-              </span>
-            </div>
             {characters === undefined ? (
-              <div className="grid min-h-72 place-items-center rounded-2xl border bg-card">
-                <IconLoader2 className="size-5 animate-spin text-muted-foreground" />
+              <div
+                role="status"
+                aria-label="Loading characters"
+                className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+              >
+                {Array.from({ length: 5 }, (_, index) => (
+                  <div
+                    key={index}
+                    aria-hidden="true"
+                    className="relative aspect-[4/5] overflow-hidden rounded-2xl border bg-muted animate-pulse motion-reduce:animate-none"
+                  >
+                    <div className="absolute inset-x-4 bottom-4 h-5 w-24 rounded-md bg-muted-foreground/15" />
+                  </div>
+                ))}
+                <span className="sr-only">Loading characters…</span>
               </div>
             ) : characters.length ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -792,17 +794,12 @@ export default function CharactersPage() {
                 ))}
               </div>
             ) : (
-              <div className="grid min-h-96 place-items-center rounded-2xl border border-dashed bg-card/60 p-8 text-center">
-                <div className="max-w-md">
-                  <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-                    <IconUsers className="size-6" />
-                  </span>
-                  <h3 className="mt-4 text-lg font-semibold">Build your first character</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Start with a description or reference photos. Seedream will create and normalize the identity images Kling needs.
-                  </p>
+              <CharacterEmptyState
+                className="-mt-7 lg:-mt-10"
+                title="Build your first character"
+                description="Start with a description or reference photos. Seedream will create and normalize the identity images Kling needs."
+                action={
                   <Button
-                    className="mt-5"
                     onClick={() => {
                       resetLocalBuilder()
                       setBuilderOpen(true)
@@ -810,8 +807,8 @@ export default function CharactersPage() {
                   >
                     <IconPlus className="size-4" /> New character
                   </Button>
-                </div>
-              </div>
+                }
+              />
             )}
           </section>
         ) : null}

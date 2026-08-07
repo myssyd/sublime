@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { IconLoader2 } from "@tabler/icons-react"
+import { ShimmerText } from "@/components/ui/shimmer-text"
 import { useSession } from "@/lib/auth-client"
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
@@ -19,10 +19,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (isPending || !session) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <IconLoader2 className="size-4 animate-spin" />
+        <ShimmerText className="text-sm font-medium">
           Opening your studio
-        </div>
+        </ShimmerText>
       </div>
     )
   }

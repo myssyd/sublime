@@ -109,6 +109,95 @@ textarea {
   background: oklch(0.87 0.255 128 / 0.35);
 }
 
+.text-shimmer {
+  --text-shimmer-duration: 2000ms;
+  --text-shimmer-base: var(--muted-foreground);
+  --text-shimmer-highlight: var(--foreground);
+  --text-shimmer-band: 400%;
+  --text-shimmer-ease: linear;
+  position: relative;
+  display: inline-block;
+  color: var(--text-shimmer-base);
+}
+
+.text-shimmer:not(.text-shimmer-rich)::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--text-shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--text-shimmer-band) 100%;
+  background-repeat: no-repeat;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer-sweep var(--text-shimmer-duration)
+    var(--text-shimmer-ease) infinite;
+}
+
+.text-shimmer-rich-highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--text-shimmer-highlight);
+  -webkit-text-fill-color: var(--text-shimmer-highlight);
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    black 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  mask-size: var(--text-shimmer-band) 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    black 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  -webkit-mask-size: var(--text-shimmer-band) 100%;
+  -webkit-mask-repeat: no-repeat;
+  animation: text-shimmer-sweep var(--text-shimmer-duration)
+    var(--text-shimmer-ease) infinite;
+}
+
+.text-shimmer-rich-highlight * {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit;
+}
+
+@keyframes text-shimmer-sweep {
+  0% {
+    background-position: 100% 0;
+    mask-position: 100% 0;
+    -webkit-mask-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+    mask-position: 0% 0;
+    -webkit-mask-position: 0% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer::before,
+  .text-shimmer-rich-highlight {
+    animation: none !important;
+  }
+}
+
 @keyframes t-digit-pop-in {
   from {
     transform: translate(
