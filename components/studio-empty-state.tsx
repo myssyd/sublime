@@ -1,15 +1,17 @@
-import { IconUsers } from "@tabler/icons-react"
+import type { ComponentType, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-export function CharacterEmptyState({
+export function StudioEmptyState({
+  icon: Icon,
   title,
   description,
   action,
   className,
 }: {
+  icon: ComponentType<{ className?: string }>
   title: string
   description: string
-  action: React.ReactNode
+  action: ReactNode
   className?: string
 }) {
   return (
@@ -21,7 +23,7 @@ export function CharacterEmptyState({
     >
       <div className="max-w-md">
         <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-          <IconUsers className="size-6" />
+          <Icon className="size-6" />
         </span>
         <h2 className="mt-4 text-lg font-semibold">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">

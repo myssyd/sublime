@@ -15,6 +15,7 @@ import {
   IconPaperclip,
   IconPhoto,
   IconPlus,
+  IconUsers,
   IconVolume,
   IconX,
 } from "@tabler/icons-react"
@@ -22,7 +23,7 @@ import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
-import { CharacterEmptyState } from "@/components/character-empty-state"
+import { StudioEmptyState } from "@/components/studio-empty-state"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Select,
@@ -677,7 +678,8 @@ export default function CreatePage() {
             <IconLoader2 className="size-5 animate-spin" />
           </div>
         ) : characters.length === 0 ? (
-          <CharacterEmptyState
+          <StudioEmptyState
+            icon={IconUsers}
             title="Create your first character"
             description="Every studio starts with a face. Build an AI character, then come back to create their content."
             action={

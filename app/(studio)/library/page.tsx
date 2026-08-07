@@ -19,6 +19,7 @@ import {
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
+import { StudioEmptyState } from "@/components/studio-empty-state"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -121,6 +122,11 @@ export default function LibraryPage() {
   const videosHaveMore = status === "CanLoadMore" || status === "LoadingMore"
   const initialLoading =
     characters === undefined || status === "LoadingFirstPage"
+  const hasAnyContent =
+    (characters ?? []).some(
+      (character) =>
+        character.creationImages.length > 0 || character.videoCount > 0
+    ) || (characterFilter === "all" && videos.length > 0)
   const selectedCharacter =
     characterFilter === "all"
       ? null
@@ -149,6 +155,7 @@ export default function LibraryPage() {
       />
 
       <div className="mx-auto max-w-[1500px] px-5 pb-10 md:px-8 lg:px-10">
+        {!initialLoading && hasAnyContent ? (
         <section className="border-y py-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div
@@ -224,33 +231,23 @@ export default function LibraryPage() {
             </div>
           </div>
         </section>
+        ) : null}
 
         {initialLoading ? (
           <div className="grid min-h-[420px] place-items-center text-muted-foreground">
             <IconLoader2 className="size-6 animate-spin" />
           </div>
         ) : items.length === 0 ? (
-          <section className="grid min-h-[420px] place-items-center py-10 text-center">
-            <div className="max-w-sm">
-              <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-                {mediaFilter === "videos" ? (
-                  <IconMovie className="size-6" />
-                ) : (
-                  <IconPhoto className="size-6" />
-                )}
-              </span>
-              <h2 className="mt-4 text-lg font-semibold">{emptyLabel}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Create a picture or clone a short performance and it will appear here automatically.
-              </p>
-              <Link
-                href="/create"
-                className={cn(buttonVariants(), "mt-5")}
-              >
+          <StudioEmptyState
+            icon={mediaFilter === "videos" ? IconMovie : IconPhoto}
+            title={emptyLabel}
+            description="Create a picture or clone a short performance and it will appear here automatically."
+            action={
+              <Link href="/create" className={buttonVariants()}>
                 Go to Studio <IconArrowRight className="size-4" />
               </Link>
-            </div>
-          </section>
+            }
+          />
         ) : (
           <>
             <section

@@ -14,12 +14,13 @@ import {
   IconRefresh,
   IconSparkles,
   IconTextCaption,
+  IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
-import { CharacterEmptyState } from "@/components/character-empty-state"
+import { StudioEmptyState } from "@/components/studio-empty-state"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -794,8 +795,9 @@ export default function CharactersPage() {
                 ))}
               </div>
             ) : (
-              <CharacterEmptyState
+              <StudioEmptyState
                 className="-mt-7 lg:-mt-10"
+                icon={IconUsers}
                 title="Build your first character"
                 description="Start with a description or reference photos. Seedream will create and normalize the identity images Kling needs."
                 action={
