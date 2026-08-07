@@ -697,7 +697,7 @@ export default function CreatePage() {
             }
           />
         ) : (
-          <div className="grid items-start gap-7 lg:grid-cols-[minmax(360px,470px)_minmax(0,1fr)] xl:grid-cols-[480px_minmax(0,1fr)]">
+          <div className="grid items-stretch gap-7 lg:grid-cols-[minmax(360px,470px)_minmax(0,1fr)] xl:grid-cols-[480px_minmax(0,1fr)]">
             <aside className="min-w-0 space-y-3 lg:sticky lg:top-5">
               <section className="px-1">
                 <div>
@@ -1112,16 +1112,15 @@ export default function CreatePage() {
               </section>
             </aside>
 
-            <section className="min-w-0 space-y-6">
-              <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
+            <section className="flex min-h-0 min-w-0 flex-col gap-6">
+              <div className="px-1">
                 <h2 className="text-2xl font-semibold tracking-tight">Content</h2>
-                <Link href="/library" className={buttonVariants({ variant: "outline", size: "sm" })}>Open full library</Link>
               </div>
 
               <Tabs
                 value={contentMode}
                 onValueChange={(value) => setContentMode(value as ContentMode)}
-                className="min-h-[clamp(22rem,52vh,36rem)] overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)]"
+                className="min-h-[clamp(22rem,52vh,36rem)] flex-1 overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)] lg:min-h-0"
               >
                 <div className="border-b px-4 py-3 sm:px-5">
                   <TabsList aria-label="Content type" className="h-10">
@@ -1142,7 +1141,7 @@ export default function CreatePage() {
                   </TabsList>
                 </div>
 
-                <TabsContent value="photos" className="flex flex-col">
+                <TabsContent value="photos" className="flex min-h-0 flex-col lg:overflow-y-auto">
                   {selectedCharacterPictures.length === 0 ? (
                     <div className="grid min-h-64 flex-1 place-items-center px-6 text-center">
                       <div>
@@ -1152,7 +1151,7 @@ export default function CreatePage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    <div className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-4 xl:grid-cols-5">
                       {selectedCharacterPictures.map((picture, index) => {
                         const alt = `${selectedCharacter?.name ?? "Character"} photo ${index + 1}`
                         return (
@@ -1163,7 +1162,7 @@ export default function CreatePage() {
                             onClick={() =>
                               setPreviewMedia({ kind: "image", url: picture.url, alt })
                             }
-                            className="group relative aspect-square overflow-hidden rounded-sm bg-muted outline-none focus-visible:brightness-90"
+                            className="group relative aspect-square overflow-hidden rounded-xl bg-muted outline-none focus-visible:brightness-90"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={picture.url} alt={alt} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
@@ -1175,7 +1174,7 @@ export default function CreatePage() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="videos" className="flex flex-col">
+                <TabsContent value="videos" className="flex min-h-0 flex-col lg:overflow-y-auto">
                   {selectedCharacterVideos === undefined ? (
                     <div className="grid min-h-64 flex-1 place-items-center text-muted-foreground"><IconLoader2 className="size-5 animate-spin" /></div>
                   ) : selectedCharacterVideos.length === 0 ? (
@@ -1187,7 +1186,7 @@ export default function CreatePage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    <div className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-4 xl:grid-cols-5">
                       {selectedCharacterVideos.map((generatedVideo) => {
                         const pending =
                           generatedVideo.status === "processing" ||
@@ -1196,7 +1195,7 @@ export default function CreatePage() {
                           <article
                             key={generatedVideo._id}
                             aria-label={`${generatedVideo.characterName} video ${generatedVideo.status}`}
-                            className="group overflow-hidden rounded-sm bg-muted"
+                            className="group overflow-hidden rounded-xl bg-muted"
                           >
                             <div className="relative aspect-square overflow-hidden bg-muted">
                               {generatedVideo.outputVideoUrl ? (
