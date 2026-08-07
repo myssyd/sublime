@@ -241,3 +241,23 @@ textarea {
     animation: none !important;
   }
 }
+
+@keyframes video-processing-shimmer {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.video-processing-shimmer {
+  animation: video-processing-shimmer 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-processing-shimmer {
+    animation: none;
+    opacity: 0.35;
+  }
+}

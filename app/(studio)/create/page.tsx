@@ -122,18 +122,18 @@ function PictureModelIcon({
 }
 
 function AspectRatioIcon({ ratio }: { ratio: PictureAspectRatio }) {
-  const dimensions: Record<PictureAspectRatio, { width: number; height: number }> = {
-    "4:5": { width: 11, height: 13 },
-    "1:1": { width: 12, height: 12 },
-    "9:16": { width: 8, height: 14 },
+  const dims: Record<PictureAspectRatio, { w: number; h: number }> = {
+    "1:1": { w: 12, h: 12 },
+    "4:5": { w: 11, h: 13 },
+    "9:16": { w: 8, h: 14 },
   }
-  const { width, height } = dimensions[ratio]
+  const { w, h } = dims[ratio]
 
   return (
-    <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+    <span className="flex size-4 shrink-0 items-center justify-center text-foreground" aria-hidden="true">
       <span
-        className="rounded-[2px] border border-current opacity-70"
-        style={{ width, height }}
+        className="rounded-[2px] border"
+        style={{ width: w, height: h, borderColor: "currentColor" }}
       />
     </span>
   )
@@ -646,11 +646,6 @@ export default function CreatePage() {
       invalidateReelImport()
       setPrompt("")
       if (fileInputRef.current) fileInputRef.current.value = ""
-      toast.success("Video clone queued", {
-        description: reusedSource
-          ? "The existing Reel import was reused. Kling is reconstructing the performance."
-          : "Kling is reconstructing the performance with your character.",
-      })
     } catch (error) {
       track("generation_failed", {
         kind: "video",
@@ -696,7 +691,6 @@ export default function CreatePage() {
                   <h2 className="text-sm font-semibold">
                     Your characters <span className="ml-1 text-[11px] font-medium text-muted-foreground">{characters.length}</span>
                   </h2>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Pick who you want to create with.</p>
                 </div>
 
                 <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 pt-1" role="group" aria-label="Choose a character">
@@ -771,29 +765,21 @@ export default function CreatePage() {
                   onValueChange={(value) => setCreateMode(value as CreateMode)}
                   className="border-t"
                 >
-                  <div className="px-5 pt-5 sm:px-6">
+                  <div className="flex justify-center px-5 pt-5 sm:px-6">
                     <TabsList aria-label="Creation type">
                       <TabsTrigger value="picture"><IconPhoto className="size-4" /> Picture</TabsTrigger>
                       <TabsTrigger value="video"><IconMovie className="size-4" /> Video</TabsTrigger>
                     </TabsList>
                   </div>
 
-                  <TabsContent value="picture" className="p-5 pt-4 sm:p-6 sm:pt-4">
-                    <div>
-                      <h3 className="text-base font-semibold">Create a picture</h3>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Describe the scene. {selectedCharacter?.name}&apos;s identity stays locked.
-                      </p>
-                    </div>
-                    <label htmlFor="picture-direction" className="mt-5 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      Creative direction
-                    </label>
+                  <TabsContent value="picture" className="p-5 pt-6 sm:p-6 sm:pt-6">
                     <Textarea
                       id="picture-direction"
+                      aria-label="Creative direction"
                       value={picturePrompt}
                       onChange={(event) => setPicturePrompt(event.target.value)}
                       placeholder={`Put ${selectedCharacter?.name ?? "the character"} in a sunlit café, candid expression, warm editorial photography…`}
-                      className="mt-2 min-h-32 resize-none"
+                      className="min-h-32 resize-none"
                     />
 
                     <input
@@ -852,11 +838,8 @@ export default function CreatePage() {
                       ) : null}
                     </div>
 
-                    <div className="mt-10 grid grid-cols-2 gap-3">
+                    <div className="mt-7 grid grid-cols-2 gap-3">
                       <div className="min-w-0">
-                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          Model
-                        </span>
                         <Select
                           value={pictureModel}
                           disabled={generatingPicture}
@@ -866,7 +849,7 @@ export default function CreatePage() {
                         >
                           <SelectTrigger
                             aria-label={`Image model: ${pictureModels.find((model) => model.value === pictureModel)?.label}`}
-                            className="mt-2 h-11 w-full text-xs font-medium"
+                            className="h-11 w-full text-xs font-medium"
                           >
                             <SelectValue>
                               {(value: PictureModel) => {
@@ -895,9 +878,6 @@ export default function CreatePage() {
                       </div>
 
                       <div className="min-w-0">
-                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          Aspect ratio
-                        </span>
                         <Select
                           value={pictureAspectRatio}
                           disabled={generatingPicture}
@@ -907,7 +887,7 @@ export default function CreatePage() {
                         >
                           <SelectTrigger
                             aria-label={`Aspect ratio: ${pictureAspectRatios.find((ratio) => ratio.value === pictureAspectRatio)?.label} (${pictureAspectRatio})`}
-                            className="mt-2 h-11 w-full text-xs font-medium"
+                            className="h-11 w-full text-xs font-medium"
                           >
                             <SelectValue>
                               {(value: PictureAspectRatio) => {
@@ -951,12 +931,9 @@ export default function CreatePage() {
                         </span>
                       ) : null}
                     </Button>
-                    <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                      {pictureModels.find((model) => model.value === pictureModel)?.label} · {pictureAspectRatio} · usually takes about a minute
-                    </p>
                   </TabsContent>
 
-                  <TabsContent value="video" className="p-5 pt-4 sm:p-6 sm:pt-4">
+                  <TabsContent value="video" className="p-5 pt-6 sm:p-6 sm:pt-6">
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -965,11 +942,6 @@ export default function CreatePage() {
                       onChange={(event) => void chooseVideo(event.target.files?.[0])}
                     />
                     <div>
-                      <h3 className="text-base font-semibold">Create a video</h3>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Add a short performance for {selectedCharacter?.name} to recreate.</p>
-                    </div>
-
-                    <div className="mt-10">
                       <div className="flex items-center justify-between gap-3">
                         <label htmlFor="reel-url" className="flex items-center gap-2 text-sm font-semibold">
                           <IconMovie className="size-4 text-muted-foreground" /> Source video
@@ -1034,7 +1006,11 @@ export default function CreatePage() {
                               }}
                               placeholder="Paste an Instagram Reel link"
                               aria-invalid={Boolean(reelError) || (reelUrl.trim().length > 0 && !reelUrlValid)}
-                              aria-describedby="reel-status"
+                              aria-describedby={
+                                fetchingReel || reelError || fetchedReel?.sourceUrl === canonicalReelUrl || (reelUrl.trim().length > 0 && !reelUrlValid)
+                                  ? "reel-status"
+                                  : undefined
+                              }
                               className={cn(
                                 "h-11 rounded-xl pl-10 pr-10",
                                 (reelError || (reelUrl.trim().length > 0 && !reelUrlValid)) && "border-destructive focus:border-destructive focus:ring-destructive/20"
@@ -1052,19 +1028,13 @@ export default function CreatePage() {
                             <span id="reel-status" aria-live="polite" className="sr-only">
                               Loading video…
                             </span>
-                          ) : (
-                            <div id="reel-status" aria-live="polite" className="mt-2 min-h-5">
-                              {reelError ? (
-                                <p className="text-xs text-destructive">Couldn&apos;t load this Reel. Check that it&apos;s public and 3–10 seconds long.</p>
-                              ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
-                                <p className="flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400"><IconCheck className="size-3.5" /> Video ready · {fetchedReel.durationSeconds.toFixed(1)} sec · {formatFileSize(fetchedReel.fileSize)}</p>
-                              ) : reelUrl.trim().length > 0 && !reelUrlValid ? (
-                                <p className="text-xs text-destructive">Paste a link like instagram.com/reel/…</p>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">Loads automatically · public Reels · 3–10 sec</p>
-                              )}
-                            </div>
-                          )}
+                          ) : reelError ? (
+                            <p id="reel-status" aria-live="polite" className="mt-2 text-xs text-destructive">Couldn&apos;t load this Reel. Check that it&apos;s public and 3–10 seconds long.</p>
+                          ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                            <p id="reel-status" aria-live="polite" className="mt-2 flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400"><IconCheck className="size-3.5" /> Video ready · {fetchedReel.durationSeconds.toFixed(1)} sec · {formatFileSize(fetchedReel.fileSize)}</p>
+                          ) : reelUrl.trim().length > 0 && !reelUrlValid ? (
+                            <p id="reel-status" aria-live="polite" className="mt-2 text-xs text-destructive">Paste a link like instagram.com/reel/…</p>
+                          ) : null}
                           {fetchedReel?.sourceUrl === canonicalReelUrl && selectedVideoImage ? (
                             <VideoReferencePair
                               videoSrc={fetchedReel.previewUrl}
@@ -1084,7 +1054,7 @@ export default function CreatePage() {
                       )}
                     </div>
 
-                    <div className="mt-10">
+                    <div className="mt-7">
                       <label htmlFor="video-prompt" className="text-sm font-semibold">Prompt <span className="font-normal text-muted-foreground">· optional</span></label>
                       <Textarea id="video-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Keep the outfit, change the lighting, add wind…" className="mt-3 min-h-24 resize-none" />
                     </div>
@@ -1119,7 +1089,6 @@ export default function CreatePage() {
                         </span>
                       ) : null}
                     </Button>
-                    <p className="mt-2 text-center text-[11px] text-muted-foreground">Kling O3 Pro · usually takes several minutes</p>
                   </TabsContent>
                 </Tabs>
               </section>
@@ -1155,7 +1124,7 @@ export default function CreatePage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3">
+                  <div className="flex flex-wrap gap-1 bg-card p-1">
                     {selectedCharacterPictures.map((picture, index) => (
                       <article key={picture.key} className="group relative aspect-square overflow-hidden rounded-sm bg-muted">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1191,24 +1160,49 @@ export default function CreatePage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3">
-                    {selectedCharacterVideos.map((generatedVideo) => (
-                      <article key={generatedVideo._id} className="group min-w-0 overflow-hidden rounded-sm bg-muted">
-                        <div className="relative aspect-square bg-muted">
-                          {generatedVideo.outputVideoUrl ? (
-                            <video src={generatedVideo.outputVideoUrl} controls playsInline preload="metadata" aria-label={`${generatedVideo.characterName} generated video`} className="size-full bg-black object-cover" />
-                          ) : generatedVideo.characterImageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={generatedVideo.characterImageUrl} alt="" className="size-full object-cover opacity-55" />
-                          ) : null}
-                          {(generatedVideo.status === "processing" || generatedVideo.status === "queued") ? (
-                            <div className="absolute inset-0 grid place-items-center bg-black/25"><IconLoader2 className="size-6 animate-spin text-white" /></div>
-                          ) : null}
-                          <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium capitalize text-white backdrop-blur-sm">
-                            {generatedVideo.status}
-                          </span>
-                        </div>
-                      </article>
-                    ))}
+                    {selectedCharacterVideos.map((generatedVideo) => {
+                      const pending =
+                        generatedVideo.status === "processing" ||
+                        generatedVideo.status === "queued"
+                      return (
+                        <article
+                          key={generatedVideo._id}
+                          aria-label={`${generatedVideo.characterName} video ${generatedVideo.status}`}
+                          className="group w-40 shrink-0 overflow-hidden rounded-sm bg-muted sm:w-44 xl:w-48"
+                        >
+                          <div className="relative aspect-[9/16] overflow-hidden bg-muted">
+                            {generatedVideo.outputVideoUrl ? (
+                              <video src={generatedVideo.outputVideoUrl} controls playsInline preload="metadata" aria-label={`${generatedVideo.characterName} generated video`} className="size-full bg-black object-cover" />
+                            ) : generatedVideo.characterImageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={generatedVideo.characterImageUrl}
+                                alt=""
+                                className={cn(
+                                  "size-full object-cover",
+                                  pending ? "opacity-40" : "opacity-55"
+                                )}
+                              />
+                            ) : pending ? (
+                              <div className="size-full bg-muted-foreground/10" />
+                            ) : null}
+                            {pending ? (
+                              <>
+                                <span className="sr-only">Generating video</span>
+                                <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-muted/15">
+                                  <div className="video-processing-shimmer absolute inset-y-0 -left-2/3 w-2/3 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/15" />
+                                </div>
+                              </>
+                            ) : null}
+                            {generatedVideo.status === "failed" ? (
+                              <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+                                Failed
+                              </span>
+                            ) : null}
+                          </div>
+                        </article>
+                      )
+                    })}
                   </div>
                 )}
               </section>
