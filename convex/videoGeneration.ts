@@ -44,28 +44,43 @@ export const generateClone = internalAction({
       if (!character.primaryImageKey) {
         throw new Error("Character has no approved hero image")
       }
-      const characterImageKey = video.characterImageKey ?? character.primaryImageKey
-      const supportingImageKeys = [
-        character.primaryImageKey,
-        ...character.referenceImageKeys,
-      ].filter((key) => key !== characterImageKey)
-      const [sourceVideoUrl, characterImageUrl, ...supportingImageUrls] =
-        await Promise.all([
-          r2.getUrl(video.sourceVideoKey, { expiresIn: 60 * 60 }),
-          r2.getUrl(characterImageKey, { expiresIn: 60 * 60 }),
-          ...supportingImageKeys.map((key) =>
+      const selectedLookImageKey =
+        video.characterImageKey ?? character.primaryImageKey
+      const hasSeparateLookImage =
+        selectedLookImageKey !== character.primaryImageKey
+      const supportingImageKeys = character.referenceImageKeys.filter(
+        (key) => key !== selectedLookImageKey
+      )
+      const [
+        sourceVideoUrl,
+        characterFrontalImageUrl,
+        supportingImageUrls,
+        selectedLookImageUrl,
+      ] = await Promise.all([
+        r2.getUrl(video.sourceVideoKey, { expiresIn: 60 * 60 }),
+        r2.getUrl(character.primaryImageKey, { expiresIn: 60 * 60 }),
+        Promise.all(
+          supportingImageKeys.map((key) =>
             r2.getUrl(key, { expiresIn: 60 * 60 })
-          ),
-        ])
+          )
+        ),
+        hasSeparateLookImage
+          ? r2.getUrl(selectedLookImageKey, { expiresIn: 60 * 60 })
+          : Promise.resolve(undefined),
+      ])
 
       const direction = [
-        "Replace the main on-camera person in the reference video with @Element1.",
-        "Preserve the original performance exactly: choreography, timing, body motion, framing, camera movement, lighting, environment, cuts, and pacing.",
-        "Use the exact outfit, styling, and accessories shown in @Element1's frontal image. Treat that chosen image as the source of truth for wardrobe; supporting references are for identity and body consistency only.",
-        "Keep @Element1's face, hair, skin tone, body proportions, and wardrobe identity consistent in every frame.",
+        "Edit @Video1 by replacing only the primary on-camera performer with @Element1.",
+        "Preserve the source performance: choreography, timing, body motion, framing, camera movement, lighting, environment, cuts, and pacing, except where the additional creative direction explicitly requests a change.",
+        selectedLookImageUrl
+          ? "Use @Image1 as the sole source of truth for outfit, styling, and accessories. Use @Element1 as the sole source of truth for facial identity, hair, skin tone, and body proportions."
+          : "Use the exact outfit, styling, and accessories shown in @Element1's frontal image.",
+        selectedLookImageUrl
+          ? "Keep @Element1's identity and body proportions and @Image1's wardrobe consistent in every frame."
+          : "Keep @Element1's face, hair, skin tone, body proportions, and wardrobe consistent in every frame.",
         "Render photorealistically with stable hands, clean occlusions, natural motion blur, and no identity drift.",
         character.identityPrompt,
-        video.prompt,
+        video.prompt ? `Additional creative direction: ${video.prompt}` : undefined,
       ]
         .filter(Boolean)
         .join(" ")
@@ -76,9 +91,12 @@ export const generateClone = internalAction({
           video_url: sourceVideoUrl,
           keep_audio: video.keepAudio,
           shot_type: "customize",
+          ...(selectedLookImageUrl
+            ? { image_urls: [selectedLookImageUrl] }
+            : {}),
           elements: [
             {
-              frontal_image_url: characterImageUrl,
+              frontal_image_url: characterFrontalImageUrl,
               reference_image_urls: supportingImageUrls,
             },
           ],
