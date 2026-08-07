@@ -9,7 +9,37 @@ import { action, type ActionCtx } from "./_generated/server"
 
 const SEEDREAM_TEXT_MODEL = "bytedance/seedream/v5/pro/text-to-image"
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit"
-const IMAGE_SIZE = { width: 1280, height: 1600 }
+const NANO_BANANA_TEXT_MODEL = "fal-ai/nano-banana"
+const NANO_BANANA_EDIT_MODEL = "fal-ai/nano-banana/edit"
+
+type ImageModel = "seedream-5" | "nano-banana"
+type ImageAspectRatio =
+  | "21:9"
+  | "16:9"
+  | "3:2"
+  | "4:3"
+  | "5:4"
+  | "1:1"
+  | "4:5"
+  | "3:4"
+  | "2:3"
+  | "9:16"
+
+const IMAGE_SIZES: Record<
+  ImageAspectRatio,
+  { width: number; height: number }
+> = {
+  "21:9": { width: 2016, height: 864 },
+  "16:9": { width: 2048, height: 1152 },
+  "3:2": { width: 1800, height: 1200 },
+  "4:3": { width: 1600, height: 1200 },
+  "5:4": { width: 1600, height: 1280 },
+  "1:1": { width: 1536, height: 1536 },
+  "4:5": { width: 1280, height: 1600 },
+  "3:4": { width: 1200, height: 1600 },
+  "2:3": { width: 1200, height: 1800 },
+  "9:16": { width: 1152, height: 2048 },
+}
 
 type SeedreamResult = {
   requestId?: string
@@ -34,32 +64,43 @@ function configureFal() {
 async function generateImage(args: {
   prompt: string
   referenceUrls?: string[]
+  model?: ImageModel
+  aspectRatio?: ImageAspectRatio
 }) {
-  const model = args.referenceUrls?.length
-    ? SEEDREAM_EDIT_MODEL
-    : SEEDREAM_TEXT_MODEL
-  const input = args.referenceUrls?.length
-    ? {
-        prompt: args.prompt,
-        image_urls: args.referenceUrls,
-        image_size: IMAGE_SIZE,
-        num_images: 1,
-      }
-    : {
-        prompt: args.prompt,
-        image_size: IMAGE_SIZE,
-        num_images: 1,
-        output_format: "jpeg" as const,
-      }
-  const result = (await fal.subscribe(model, {
-    input,
-    logs: true,
-  })) as SeedreamResult
+  const imageModel = args.model ?? "seedream-5"
+  const aspectRatio = args.aspectRatio ?? "4:5"
+  const hasReferences = Boolean(args.referenceUrls?.length)
+  const model =
+    imageModel === "nano-banana"
+      ? hasReferences
+        ? NANO_BANANA_EDIT_MODEL
+        : NANO_BANANA_TEXT_MODEL
+      : hasReferences
+        ? SEEDREAM_EDIT_MODEL
+        : SEEDREAM_TEXT_MODEL
+  const input =
+    imageModel === "nano-banana"
+      ? {
+          prompt: args.prompt,
+          ...(hasReferences ? { image_urls: args.referenceUrls } : {}),
+          aspect_ratio: aspectRatio,
+          num_images: 1,
+          output_format: "jpeg" as const,
+          limit_generations: true,
+        }
+      : {
+          prompt: args.prompt,
+          ...(hasReferences ? { image_urls: args.referenceUrls } : {}),
+          image_size: IMAGE_SIZES[aspectRatio],
+          num_images: 1,
+          output_format: "jpeg" as const,
+        }
+  const result = (await fal.subscribe(model, { input, logs: true })) as SeedreamResult
   const outputUrl = result.data?.images?.[0]?.url
-  if (!outputUrl) throw new Error("Seedream returned no image")
+  if (!outputUrl) throw new Error("The image model returned no image")
   const response = await fetch(outputUrl)
   if (!response.ok) {
-    throw new Error(`Could not download Seedream output (${response.status})`)
+    throw new Error(`Could not download the generated image (${response.status})`)
   }
   return {
     blob: await response.blob(),
@@ -262,6 +303,19 @@ export const generateCreation = action({
   args: {
     characterId: v.id("characters"),
     prompt: v.string(),
+    model: v.union(v.literal("seedream-5"), v.literal("nano-banana")),
+    aspectRatio: v.union(
+      v.literal("21:9"),
+      v.literal("16:9"),
+      v.literal("3:2"),
+      v.literal("4:3"),
+      v.literal("5:4"),
+      v.literal("1:1"),
+      v.literal("4:5"),
+      v.literal("3:4"),
+      v.literal("2:3"),
+      v.literal("9:16")
+    ),
   },
   handler: async (ctx, args): Promise<{ imageKey: string }> => {
     const user = await authComponent.getAuthUser(ctx)
@@ -294,7 +348,9 @@ export const generateCreation = action({
       )
       const generated = await generateImage({
         referenceUrls,
-        prompt: `Create a new photorealistic 4:5 social photo of the EXACT SAME PERSON shown in the supplied identity references. Preserve their recognizable facial identity, facial proportions, skin tone, hair, age, build, and distinctive features exactly.
+        model: args.model,
+        aspectRatio: args.aspectRatio,
+        prompt: `Create a new photorealistic ${args.aspectRatio} social photo of the EXACT SAME PERSON shown in the supplied identity references. Preserve their recognizable facial identity, facial proportions, skin tone, hair, age, build, and distinctive features exactly.
 
 Creative direction: ${prompt}
 
@@ -321,7 +377,10 @@ Make the result feel like a polished, believable Instagram post with natural pho
     } catch (error) {
       await ctx.runMutation(internal.characters.internalRecordImageUsage, {
         userId: user._id,
-        model: SEEDREAM_EDIT_MODEL,
+        model:
+          args.model === "nano-banana"
+            ? NANO_BANANA_EDIT_MODEL
+            : SEEDREAM_EDIT_MODEL,
         status: "failed",
         elapsedMs: Date.now() - startedAt,
       })

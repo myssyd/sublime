@@ -21,6 +21,13 @@ import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
@@ -43,11 +50,69 @@ type FetchedReel = {
   reused: boolean
 }
 
-const pictureIdeas = [
-  "Golden hour portrait",
-  "Editorial street style",
-  "Minimal studio campaign",
-]
+const pictureModels = [
+  {
+    value: "seedream-5",
+    label: "Seedream 5",
+    icon: "bytedance",
+    description: "Detailed, polished compositions",
+  },
+  {
+    value: "nano-banana",
+    label: "Nano Banana",
+    icon: "nanobanana",
+    description: "Natural, prompt-faithful edits",
+  },
+] as const
+
+const pictureAspectRatios = [
+  { value: "9:16", label: "Reel / Story", description: "Vertical" },
+  { value: "4:5", label: "Instagram post", description: "Portrait" },
+  { value: "1:1", label: "Feed post", description: "Square" },
+] as const
+
+type PictureModel = (typeof pictureModels)[number]["value"]
+type PictureAspectRatio = (typeof pictureAspectRatios)[number]["value"]
+
+function PictureModelIcon({
+  icon,
+  className,
+}: {
+  icon: (typeof pictureModels)[number]["icon"]
+  className?: string
+}) {
+  if (icon === "nanobanana") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M8.342 13.16H3.455c-.513 0-.772-.639-.408-1.012l1.608-1.653a3.166 3.166 0 0 1 4.565 0l.513.527.044.002c.735-1.93.786-2.809.783-5.007v-.275c-.01-1.782-.02-3.935 1.965-4.22 2.603-.375 4.504 4.219 4.815 8.299a3.166 3.166 0 0 1 3.38.774l1.609 1.653c.365.375.106 1.012-.407 1.012H19.27c.072.264.11.542.11.828v5.664c0 .914-.994 1.292-1.602.576-.229-.27-1.067-1.25-2.155-2.52-2.92 4.183-10.266 6.462-12.34 3.006h-.793a.991.991 0 1 1 0-1.982h.246c.014-1.687 1.23-3.148 2.846-3.783a7.448 7.448 0 0 0 2.76-1.889Zm7.543-2.145c0-.127-.001-.256-.005-.388a15.693 15.693 0 0 0-.632-3.939c-.38-1.282-.887-2.33-1.425-2.992-.545-.671-.906-.715-1.085-.69-.223.032-.292.098-.322.129-.05.052-.135.176-.209.45-.152.567-.15 1.286-.147 2.186v.244c.002 1.134-.009 2.028-.145 2.92a11.292 11.292 0 0 1-.537 2.08h4.507Zm-3.468 3.056c-1.636 3.166-4.981 4.71-8.118 4.87a.562.562 0 0 0 .057 1.124c3.294-.169 6.921-1.749 8.845-5.081l-.784-.913Z" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="m14.944 18.587-1.704-.445V10.01l1.824-.462c1-.254 1.84-.461 1.88-.453.032 0 .056 2.235.056 4.972v4.973l-.176-.008c-.104 0-.952-.207-1.88-.446ZM7 16.542c0-2.736.024-4.98.064-4.98.032-.008.872.2 1.88.454l1.816.461-.016 4.05-.024 4.049-1.632.422c-.896.23-1.736.445-1.856.469L7 21.523v-4.98Zm12.24-4.065c0-9.03.008-9.515.144-9.475.072.024.784.207 1.576.406.792.207 1.576.405 1.744.445l.296.08-.016 8.56-.024 8.568-1.624.414c-.888.23-1.728.437-1.856.47l-.24.055v-9.523ZM1 12.509c0-4.678.024-8.505.064-8.505.032 0 .872.207 1.872.454l1.824.461v7.582c0 4.16-.016 7.574-.032 7.574-.024 0-.872.215-1.88.47L1 21.013v-8.505Z" />
+    </svg>
+  )
+}
+
+function AspectRatioIcon({ ratio }: { ratio: PictureAspectRatio }) {
+  const dimensions: Record<PictureAspectRatio, { width: number; height: number }> = {
+    "4:5": { width: 11, height: 13 },
+    "1:1": { width: 12, height: 12 },
+    "9:16": { width: 8, height: 14 },
+  }
+  const { width, height } = dimensions[ratio]
+
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+      <span
+        className="rounded-[2px] border border-current opacity-70"
+        style={{ width, height }}
+      />
+    </span>
+  )
+}
 
 function canonicalInstagramReelUrl(value: string) {
   try {
@@ -99,6 +164,9 @@ export default function CreatePage() {
   const [characterId, setCharacterId] = useState<Id<"characters"> | null>(null)
   const [createMode, setCreateMode] = useState<CreateMode>("picture")
   const [picturePrompt, setPicturePrompt] = useState("")
+  const [pictureModel, setPictureModel] = useState<PictureModel>("seedream-5")
+  const [pictureAspectRatio, setPictureAspectRatio] =
+    useState<PictureAspectRatio>("9:16")
   const [generatingPicture, setGeneratingPicture] = useState(false)
   const [referenceSource, setReferenceSource] = useState<ReferenceSource>("instagram")
   const [video, setVideo] = useState<File | null>(null)
@@ -224,6 +292,8 @@ export default function CreatePage() {
       await generatePicture({
         characterId: activeCharacterId,
         prompt: picturePrompt,
+        model: pictureModel,
+        aspectRatio: pictureAspectRatio,
       })
       setPicturePrompt("")
       toast.success("Picture created", {
@@ -424,27 +494,90 @@ export default function CreatePage() {
                       placeholder={`Put ${selectedCharacter?.name ?? "the character"} in a sunlit café, candid expression, warm editorial photography…`}
                       className="mt-2 min-h-32 resize-none"
                     />
-                    <div className="mt-3 flex flex-wrap gap-2" aria-label="Picture ideas">
-                      {pictureIdeas.map((idea) => (
-                        <button
-                          key={idea}
-                          type="button"
-                          onClick={() => setPicturePrompt(idea)}
-                          className="rounded-full border bg-background px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5">
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Model
+                        </span>
+                        <Select
+                          value={pictureModel}
+                          disabled={generatingPicture}
+                          onValueChange={(value) => {
+                            if (value) setPictureModel(value as PictureModel)
+                          }}
                         >
-                          {idea}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-5 flex items-center gap-3 rounded-2xl bg-muted/45 px-3.5 py-3">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-lime-800 dark:text-lime-300">
-                        <IconSparkles className="size-4" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-medium">Portrait format · 4:5</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">Optimized for a social feed.</p>
+                          <SelectTrigger
+                            aria-label={`Image model: ${pictureModels.find((model) => model.value === pictureModel)?.label}`}
+                            className="mt-2 h-11 w-full text-xs font-medium"
+                          >
+                            <SelectValue>
+                              {(value: PictureModel) => {
+                                const model = pictureModels.find((option) => option.value === value)
+                                return model ? (
+                                  <>
+                                    <PictureModelIcon icon={model.icon} className="size-4 text-muted-foreground" />
+                                    <span className="truncate">{model.label}</span>
+                                  </>
+                                ) : null
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent align="start" alignItemWithTrigger={false} className="w-64">
+                            {pictureModels.map((model) => (
+                              <SelectItem key={model.value} value={model.value}>
+                                <PictureModelIcon icon={model.icon} className="size-4 text-muted-foreground" />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block font-medium">{model.label}</span>
+                                  <span className="mt-0.5 block text-[11px] text-muted-foreground">{model.description}</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Aspect ratio
+                        </span>
+                        <Select
+                          value={pictureAspectRatio}
+                          disabled={generatingPicture}
+                          onValueChange={(value) => {
+                            if (value) setPictureAspectRatio(value as PictureAspectRatio)
+                          }}
+                        >
+                          <SelectTrigger
+                            aria-label={`Aspect ratio: ${pictureAspectRatios.find((ratio) => ratio.value === pictureAspectRatio)?.label} (${pictureAspectRatio})`}
+                            className="mt-2 h-11 w-full text-xs font-medium"
+                          >
+                            <SelectValue>
+                              {(value: PictureAspectRatio) => {
+                                const ratio = pictureAspectRatios.find((option) => option.value === value)
+                                return ratio ? (
+                                  <>
+                                    <AspectRatioIcon ratio={ratio.value} />
+                                    <span className="truncate">{ratio.value} · {ratio.label}</span>
+                                  </>
+                                ) : null
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent align="start" alignItemWithTrigger={false} className="w-60">
+                            {pictureAspectRatios.map((ratio) => (
+                              <SelectItem key={ratio.value} value={ratio.value}>
+                                <AspectRatioIcon ratio={ratio.value} />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block font-medium">{ratio.label}</span>
+                                  <span className="mt-0.5 block text-[11px] text-muted-foreground">{ratio.description} · {ratio.value}</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
+
                     <Button
                       size="lg"
                       className="mt-4 w-full text-sm"
@@ -454,7 +587,9 @@ export default function CreatePage() {
                       {generatingPicture ? <IconLoader2 className="size-5 animate-spin" /> : <IconSparkles className="size-4" />}
                       {generatingPicture ? "Creating picture…" : "Create picture"}
                     </Button>
-                    <p className="mt-2 text-center text-[11px] text-muted-foreground">Seedream · usually takes about a minute</p>
+                    <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                      {pictureModels.find((model) => model.value === pictureModel)?.label} · {pictureAspectRatio} · usually takes about a minute
+                    </p>
                   </TabsContent>
 
                   <TabsContent value="video" className="p-5 pt-4 sm:p-6 sm:pt-4">
