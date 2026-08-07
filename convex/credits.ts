@@ -375,7 +375,7 @@ export const getMyBalance = query({
   args: {},
   returns: v.union(balanceValidator, v.null()),
   handler: async (ctx) => {
-    const user = await authComponent.getAuthUser(ctx)
+    const user = await authComponent.safeGetAuthUser(ctx)
     if (!user) return null
     const sub = await ctx.db
       .query("subscriptions")
@@ -396,7 +396,7 @@ export const getMyBalance = query({
 export const getMySubscription = query({
   args: {},
   handler: async (ctx) => {
-    const user = await authComponent.getAuthUser(ctx)
+    const user = await authComponent.safeGetAuthUser(ctx)
     if (!user) return null
     return await ctx.db
       .query("subscriptions")
