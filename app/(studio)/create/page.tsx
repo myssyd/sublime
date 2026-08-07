@@ -323,19 +323,16 @@ export default function CreatePage() {
           </section>
         ) : (
           <div className="grid items-start gap-7 lg:grid-cols-[minmax(360px,470px)_minmax(0,1fr)] xl:grid-cols-[480px_minmax(0,1fr)]">
-            <aside className="min-w-0 space-y-5 lg:sticky lg:top-5">
-              <section className="rounded-2xl border bg-card p-4 shadow-[0_20px_60px_-44px_rgba(0,0,0,0.45)] sm:p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-sm font-semibold">Your characters</h2>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">Pick who you want to create with.</p>
-                  </div>
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                    {characters.length} {characters.length === 1 ? "character" : "characters"}
-                  </span>
+            <aside className="min-w-0 space-y-3 lg:sticky lg:top-5">
+              <section className="px-1">
+                <div>
+                  <h2 className="text-sm font-semibold">
+                    Your characters <span className="ml-1 text-[11px] font-medium text-muted-foreground">{characters.length}</span>
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Pick who you want to create with.</p>
                 </div>
 
-                <div className="mt-4 flex gap-3 overflow-x-auto pb-0.5 pt-1" role="group" aria-label="Choose a character">
+                <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 pt-1" role="group" aria-label="Choose a character">
                   {characters.map((character) => {
                     const active = character._id === activeCharacterId
                     return (
@@ -345,12 +342,12 @@ export default function CreatePage() {
                         aria-pressed={active}
                         aria-label={`${active ? "Selected character" : "Select character"}: ${character.name}`}
                         onClick={() => setCharacterId(character._id)}
-                        className="group w-14 shrink-0 text-center"
+                        className="group w-12 shrink-0 text-center"
                       >
                         <span
                           className={cn(
-                            "relative mx-auto block size-14 rounded-full bg-gradient-to-tr from-muted-foreground/20 via-border to-muted p-[2px] transition-transform group-hover:scale-[1.03]",
-                            active && "from-primary via-primary to-lime-300 shadow-[0_0_0_4px_var(--card),0_0_0_6px_color-mix(in_oklab,var(--primary)_35%,transparent)]"
+                            "relative mx-auto block size-12 rounded-full bg-gradient-to-tr from-muted-foreground/20 via-border to-muted p-[2px] transition-transform group-hover:scale-[1.03]",
+                            active && "from-primary via-primary to-lime-300 shadow-[0_0_0_3px_var(--background),0_0_0_5px_color-mix(in_oklab,var(--primary)_35%,transparent)]"
                           )}
                         >
                           <span className="block size-full overflow-hidden rounded-full bg-secondary p-0.5">
@@ -360,8 +357,8 @@ export default function CreatePage() {
                             ) : null}
                           </span>
                           {active ? (
-                            <span className="absolute bottom-0 right-0 grid size-[18px] place-items-center rounded-full border-2 border-card bg-primary text-primary-foreground">
-                              <IconCheck className="size-2.5" stroke={3} />
+                            <span className="absolute bottom-0 right-0 grid size-4 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground">
+                              <IconCheck className="size-2" stroke={3} />
                             </span>
                           ) : null}
                         </span>
@@ -372,9 +369,9 @@ export default function CreatePage() {
                     )
                   })}
 
-                  <Link href="/characters" className="group w-14 shrink-0 text-center" aria-label="Create a new character">
-                    <span className="mx-auto grid size-14 place-items-center rounded-full border border-dashed border-muted-foreground/45 bg-muted/35 text-muted-foreground transition-colors group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary">
-                      <IconPlus className="size-5" stroke={1.8} />
+                  <Link href="/characters" className="group w-12 shrink-0 text-center" aria-label="Create a new character">
+                    <span className="mx-auto grid size-12 place-items-center rounded-full border border-dashed border-muted-foreground/45 bg-muted/35 text-muted-foreground transition-colors group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary">
+                      <IconPlus className="size-4" stroke={1.8} />
                     </span>
                     <span className="mt-1.5 block text-[10px] font-medium text-muted-foreground group-hover:text-foreground">New</span>
                   </Link>
@@ -390,10 +387,7 @@ export default function CreatePage() {
                     ) : null}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="truncate text-lg font-semibold tracking-tight">{selectedCharacter?.name}</h2>
-                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-lime-800 dark:text-lime-300">Selected</span>
-                    </div>
+                    <h2 className="truncate text-lg font-semibold tracking-tight">{selectedCharacter?.name}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">AI character</p>
                     <p className="mt-2 text-[11px] font-medium text-muted-foreground">
                       {selectedCharacterPictures.length} photos <span className="mx-1.5 text-border">•</span> {selectedCharacterVideos?.length ?? 0} videos
@@ -602,8 +596,7 @@ export default function CreatePage() {
             <section className="min-w-0 space-y-6">
               <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{selectedCharacter?.name}&apos;s studio</p>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-tight">Content</h2>
+                  <h2 className="text-2xl font-semibold tracking-tight">Content</h2>
                   <p className="mt-1 text-sm text-muted-foreground">Everything created with this character, in one place.</p>
                 </div>
                 <Link href="/library" className={buttonVariants({ variant: "outline", size: "sm" })}>Open full library</Link>
