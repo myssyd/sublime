@@ -26,6 +26,7 @@ import {
   type BillingPeriod,
   type PaidPlan,
 } from "@/convex/billing"
+import { track } from "@/lib/posthog"
 import { cn } from "@/lib/utils"
 
 function BillingContent() {
@@ -49,7 +50,15 @@ function BillingContent() {
     setBusy(plan)
     try {
       const result = await createSubscriptionCheckout({ plan, period })
-      if (result.url) window.location.assign(result.url)
+      if (result.url) {
+        track("checkout_started", {
+          checkout_type: "subscription",
+          source: "billing_page",
+          plan,
+          billing_period: period,
+        })
+        window.location.assign(result.url)
+      }
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not start checkout"
@@ -62,6 +71,7 @@ function BillingContent() {
     setBusy("portal")
     try {
       const result = await createCustomerPortal({})
+      track("billing_portal_opened", { source: "billing_page" })
       window.location.assign(result.url)
     } catch (error) {
       toast.error(
@@ -75,7 +85,13 @@ function BillingContent() {
     setBusy("topup")
     try {
       const result = await createTopupCheckout({})
-      if (result.url) window.location.assign(result.url)
+      if (result.url) {
+        track("checkout_started", {
+          checkout_type: "topup",
+          source: "billing_page",
+        })
+        window.location.assign(result.url)
+      }
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not start checkout"
@@ -195,7 +211,14 @@ function BillingContent() {
                   key={value}
                   type="button"
                   aria-pressed={period === value}
-                  onClick={() => setPeriod(value)}
+                  onClick={() => {
+                    if (period !== value) {
+                      track("pricing_billing_period_changed", {
+                        billing_period: value,
+                      })
+                    }
+                    setPeriod(value)
+                  }}
                   className={cn(
                     "rounded-full px-3 py-2 font-medium capitalize text-muted-foreground transition-colors",
                     period === value &&

@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useAssetUpload } from "@/lib/use-asset-upload"
+import { track } from "@/lib/posthog"
 import { cn } from "@/lib/utils"
 
 type SourceKind = "prompt" | "image"
@@ -163,9 +164,19 @@ export default function CharactersPage() {
         sourcePrompt: description.trim() || undefined,
         sourceImageKeys,
       })
+      track("generation_requested", {
+        kind: "character_hero",
+        source_kind: sourceKind,
+        source_image_count: sourceImages.length,
+        retry: false,
+      })
       const result = await generateHero({ characterId })
       setSelectedHeroKey(result.imageKey)
     } catch (error) {
+      track("generation_failed", {
+        kind: "character_hero",
+        retry: false,
+      })
       toast.error("Could not generate the hero", {
         description: error instanceof Error ? error.message : String(error),
       })
@@ -178,6 +189,11 @@ export default function CharactersPage() {
     if (working) return
     setWorking(true)
     try {
+      track("generation_requested", {
+        kind: "character_hero",
+        retry: true,
+        has_adjustment: Boolean(adjustment.trim()),
+      })
       const result = await generateHero({
         characterId,
         adjustment: adjustment.trim() || undefined,
@@ -185,6 +201,10 @@ export default function CharactersPage() {
       setSelectedHeroKey(result.imageKey)
       setAdjustment("")
     } catch (error) {
+      track("generation_failed", {
+        kind: "character_hero",
+        retry: true,
+      })
       toast.error("Could not generate another hero", {
         description: error instanceof Error ? error.message : String(error),
       })
@@ -198,7 +218,12 @@ export default function CharactersPage() {
     setWorking(true)
     try {
       await approveHero({ id: draft._id, imageKey: effectiveSelectedHeroKey })
+      track("generation_requested", {
+        kind: "character_reference_pack",
+        retry: false,
+      })
       await generateReferencePack({ characterId: draft._id })
+      track("character_created", { source_kind: draft.sourceKind })
       setBuilderOpen(false)
       setDismissedDraftId(null)
       resetLocalBuilder()
@@ -206,6 +231,10 @@ export default function CharactersPage() {
         description: "Seedream created a Kling-ready identity pack.",
       })
     } catch (error) {
+      track("generation_failed", {
+        kind: "character_reference_pack",
+        retry: false,
+      })
       toast.error("Could not build the reference pack", {
         description: error instanceof Error ? error.message : String(error),
       })
@@ -218,7 +247,15 @@ export default function CharactersPage() {
     if (!draft || working) return
     setWorking(true)
     try {
+      track("generation_requested", {
+        kind: "character_reference_pack",
+        retry: true,
+      })
       await generateReferencePack({ characterId: draft._id })
+      track("character_created", {
+        source_kind: draft.sourceKind,
+        retry: true,
+      })
       setBuilderOpen(false)
       setDismissedDraftId(null)
       resetLocalBuilder()
@@ -226,6 +263,10 @@ export default function CharactersPage() {
         description: "Seedream created a Kling-ready identity pack.",
       })
     } catch (error) {
+      track("generation_failed", {
+        kind: "character_reference_pack",
+        retry: true,
+      })
       toast.error("Could not build the reference pack", {
         description: error instanceof Error ? error.message : String(error),
       })

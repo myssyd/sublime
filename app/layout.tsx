@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ConvexClientProvider } from "@/components/convex-provider"
+import { PosthogProvider } from "@/components/posthog-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import "./globals.css"
@@ -33,8 +34,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full bg-background text-foreground">
         <ThemeProvider>
-          <ConvexClientProvider>{children}</ConvexClientProvider>
-          <Toaster position="bottom-right" richColors />
+          <ConvexClientProvider>
+            <PosthogProvider>
+              {children}
+              <Toaster position="bottom-right" richColors />
+            </PosthogProvider>
+          </ConvexClientProvider>
         </ThemeProvider>
       </body>
     </html>

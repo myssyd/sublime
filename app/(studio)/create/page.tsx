@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useAssetUpload } from "@/lib/use-asset-upload"
+import { track } from "@/lib/posthog"
 import { cn } from "@/lib/utils"
 import { imageCreditsForModel, videoCreditsForDuration } from "@/convex/billing"
 
@@ -543,6 +544,12 @@ export default function CreatePage() {
           uploadAsset(file, "picture-reference", attachmentGroupId)
         )
       )
+      track("generation_requested", {
+        kind: "picture",
+        model: pictureModel,
+        aspect_ratio: pictureAspectRatio,
+        reference_image_count: attachmentImageKeys.length,
+      })
       await generatePicture({
         characterId: activeCharacterId,
         prompt: picturePrompt,
@@ -550,12 +557,21 @@ export default function CreatePage() {
         aspectRatio: pictureAspectRatio,
         attachmentImageKeys,
       })
+      track("picture_created", {
+        model: pictureModel,
+        aspect_ratio: pictureAspectRatio,
+        reference_image_count: attachmentImageKeys.length,
+      })
       setPicturePrompt("")
       clearPictureAttachments()
       toast.success("Picture created", {
         description: `It has been added to ${selectedCharacter?.name ?? "your character"}'s studio.`,
       })
     } catch (error) {
+      track("generation_failed", {
+        kind: "picture",
+        model: pictureModel,
+      })
       toast.error("Could not create the picture", {
         description: error instanceof Error ? error.message : String(error),
       })
@@ -589,6 +605,13 @@ export default function CreatePage() {
         reusedSource = imported.reused
       }
 
+      track("generation_requested", {
+        kind: "video",
+        source_kind: referenceSource,
+        keep_audio: keepAudio,
+        duration_seconds: selectedVideoDuration,
+        reused_source: reusedSource,
+      })
       await createVideo({
         characterId: activeCharacterId,
         characterImageKey: selectedVideoImage.key,
@@ -598,6 +621,12 @@ export default function CreatePage() {
         sourceUrl,
         prompt,
         keepAudio,
+      })
+      track("video_queued", {
+        source_kind: referenceSource,
+        keep_audio: keepAudio,
+        duration_seconds: selectedVideoDuration,
+        reused_source: reusedSource,
       })
       setVideo(null)
       setVideoDuration(null)
@@ -614,6 +643,10 @@ export default function CreatePage() {
           : "Kling is reconstructing the performance with your character.",
       })
     } catch (error) {
+      track("generation_failed", {
+        kind: "video",
+        source_kind: referenceSource,
+      })
       toast.error("Could not start the clone", {
         description: error instanceof Error ? error.message : String(error),
       })

@@ -12,6 +12,7 @@ import {
   IconUserCircle,
 } from "@tabler/icons-react"
 import { signOut, useSession } from "@/lib/auth-client"
+import { track } from "@/lib/posthog"
 import { cn } from "@/lib/utils"
 
 export function AccountMenu({ placement }: { placement: "sidebar" | "header" }) {
@@ -22,6 +23,7 @@ export function AccountMenu({ placement }: { placement: "sidebar" | "header" }) 
 
   async function handleSignOut() {
     setSigningOut(true)
+    track("auth_signout")
     await signOut()
     router.replace("/login")
   }

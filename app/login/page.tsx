@@ -6,6 +6,7 @@ import { IconBrandGoogleFilled, IconLoader2, IconMovie } from "@tabler/icons-rea
 import { BrandMark } from "@/components/brand-mark"
 import { Button } from "@/components/ui/button"
 import { signIn, useSession } from "@/lib/auth-client"
+import { track } from "@/lib/posthog"
 
 function LoginContent() {
   const router = useRouter()
@@ -20,8 +21,23 @@ function LoginContent() {
 
   async function handleGoogle() {
     setSigningIn(true)
-    await signIn.social({ provider: "google", callbackURL: next })
-    setSigningIn(false)
+    track("auth_signin_started", { method: "google" })
+    try {
+      const { error } = await signIn.social({
+        provider: "google",
+        callbackURL: next,
+      })
+      if (error) {
+        track("auth_signin_failed", {
+          method: "google",
+          error: error.message,
+        })
+      }
+    } catch {
+      track("auth_signin_failed", { method: "google", error: "exception" })
+    } finally {
+      setSigningIn(false)
+    }
   }
 
   return (
