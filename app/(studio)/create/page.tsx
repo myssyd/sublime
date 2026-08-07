@@ -47,6 +47,7 @@ const MIN_VIDEO_SECONDS = 3
 const MAX_VIDEO_SECONDS = 10
 
 type CreateMode = "picture" | "video"
+type ContentMode = "photos" | "videos"
 type ReferenceSource = "upload" | "instagram"
 type FetchedReel = {
   key: string
@@ -346,6 +347,7 @@ export default function CreatePage() {
   const [prompt, setPrompt] = useState("")
   const [keepAudio, setKeepAudio] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [contentMode, setContentMode] = useState<ContentMode>("photos")
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null)
 
   const requestedCharacterId = searchParams.get("character")
@@ -1116,145 +1118,148 @@ export default function CreatePage() {
                 <Link href="/library" className={buttonVariants({ variant: "outline", size: "sm" })}>Open full library</Link>
               </div>
 
-              <section className="overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)]">
-                <div className="flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-6">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-9 place-items-center rounded-full bg-primary/15 text-lime-800 dark:text-lime-300"><IconPhoto className="size-4" /></span>
-                    <div>
-                      <h3 className="text-sm font-semibold">Photos</h3>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">Portraits and posts made with {selectedCharacter?.name}</p>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{selectedCharacterPictures.length}</span>
+              <Tabs
+                value={contentMode}
+                onValueChange={(value) => setContentMode(value as ContentMode)}
+                className="min-h-[clamp(22rem,52vh,36rem)] overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)]"
+              >
+                <div className="border-b px-4 py-3 sm:px-5">
+                  <TabsList aria-label="Content type" className="h-10">
+                    <TabsTrigger value="photos" className="gap-2 px-4">
+                      <IconPhoto className="size-4" />
+                      Photos
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {selectedCharacterPictures.length}
+                      </span>
+                    </TabsTrigger>
+                    <TabsTrigger value="videos" className="gap-2 px-4">
+                      <IconMovie className="size-4" />
+                      Videos
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {selectedCharacterVideos?.length ?? 0}
+                      </span>
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
 
-                {selectedCharacterPictures.length === 0 ? (
-                  <div className="grid min-h-64 place-items-center px-6 text-center">
-                    <div>
-                      <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconPhoto className="size-5" /></span>
-                      <p className="mt-4 text-sm font-medium">No pictures yet</p>
-                      <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Use the Picture tab to create the first post.</p>
+                <TabsContent value="photos" className="flex flex-col">
+                  {selectedCharacterPictures.length === 0 ? (
+                    <div className="grid min-h-64 flex-1 place-items-center px-6 text-center">
+                      <div>
+                        <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconPhoto className="size-5" /></span>
+                        <p className="mt-4 text-sm font-medium">No pictures yet</p>
+                        <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Use the Picture tab to create the first post.</p>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {selectedCharacterPictures.map((picture, index) => {
-                      const alt = `${selectedCharacter?.name ?? "Character"} photo ${index + 1}`
-                      return (
-                        <button
-                          key={picture.key}
-                          type="button"
-                          aria-label={`Preview ${alt}`}
-                          onClick={() =>
-                            setPreviewMedia({ kind: "image", url: picture.url, alt })
-                          }
-                          className="group relative aspect-square overflow-hidden rounded-sm bg-muted outline-none focus-visible:brightness-90"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={picture.url} alt={alt} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
-                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                      {selectedCharacterPictures.map((picture, index) => {
+                        const alt = `${selectedCharacter?.name ?? "Character"} photo ${index + 1}`
+                        return (
+                          <button
+                            key={picture.key}
+                            type="button"
+                            aria-label={`Preview ${alt}`}
+                            onClick={() =>
+                              setPreviewMedia({ kind: "image", url: picture.url, alt })
+                            }
+                            className="group relative aspect-square overflow-hidden rounded-sm bg-muted outline-none focus-visible:brightness-90"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={picture.url} alt={alt} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
 
-              <section className="overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)]">
-                <div className="flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-6">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-9 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-4" /></span>
-                    <div>
-                      <h3 className="text-sm font-semibold">Videos</h3>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">Performances made with {selectedCharacter?.name}</p>
+                <TabsContent value="videos" className="flex flex-col">
+                  {selectedCharacterVideos === undefined ? (
+                    <div className="grid min-h-64 flex-1 place-items-center text-muted-foreground"><IconLoader2 className="size-5 animate-spin" /></div>
+                  ) : selectedCharacterVideos.length === 0 ? (
+                    <div className="grid min-h-64 flex-1 place-items-center px-6 text-center">
+                      <div>
+                        <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-5" /></span>
+                        <p className="mt-4 text-sm font-medium">No videos yet</p>
+                        <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Switch to Video and add a Reel or upload to create the first performance.</p>
+                      </div>
                     </div>
-                  </div>
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{selectedCharacterVideos?.length ?? 0}</span>
-                </div>
-
-                {selectedCharacterVideos === undefined ? (
-                  <div className="grid min-h-64 place-items-center text-muted-foreground"><IconLoader2 className="size-5 animate-spin" /></div>
-                ) : selectedCharacterVideos.length === 0 ? (
-                  <div className="grid min-h-64 place-items-center px-6 text-center">
-                    <div>
-                      <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-5" /></span>
-                      <p className="mt-4 text-sm font-medium">No videos yet</p>
-                      <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Switch to Video and add a Reel or upload to create the first performance.</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3">
-                    {selectedCharacterVideos.map((generatedVideo) => {
-                      const pending =
-                        generatedVideo.status === "processing" ||
-                        generatedVideo.status === "queued"
-                      return (
-                        <article
-                          key={generatedVideo._id}
-                          aria-label={`${generatedVideo.characterName} video ${generatedVideo.status}`}
-                          className="group w-40 shrink-0 overflow-hidden rounded-sm bg-muted sm:w-44 xl:w-48"
-                        >
-                          <div className="relative aspect-[9/16] overflow-hidden bg-muted">
-                            {generatedVideo.outputVideoUrl ? (
-                              <button
-                                type="button"
-                                aria-label={`Preview ${generatedVideo.characterName} generated video`}
-                                onClick={() =>
-                                  setPreviewMedia({
-                                    kind: "video",
-                                    url: generatedVideo.outputVideoUrl!,
-                                    title: `${generatedVideo.characterName} generated video`,
-                                  })
-                                }
-                                className="relative size-full outline-none focus-visible:brightness-90"
-                              >
-                                <video
-                                  src={generatedVideo.outputVideoUrl}
-                                  muted
-                                  playsInline
-                                  preload="metadata"
-                                  aria-hidden="true"
-                                  className="pointer-events-none size-full bg-black object-cover"
-                                />
-                                <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                  <span className="grid size-11 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
-                                    <IconPlayerPlayFilled className="size-4" />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                      {selectedCharacterVideos.map((generatedVideo) => {
+                        const pending =
+                          generatedVideo.status === "processing" ||
+                          generatedVideo.status === "queued"
+                        return (
+                          <article
+                            key={generatedVideo._id}
+                            aria-label={`${generatedVideo.characterName} video ${generatedVideo.status}`}
+                            className="group overflow-hidden rounded-sm bg-muted"
+                          >
+                            <div className="relative aspect-square overflow-hidden bg-muted">
+                              {generatedVideo.outputVideoUrl ? (
+                                <button
+                                  type="button"
+                                  aria-label={`Preview ${generatedVideo.characterName} generated video`}
+                                  onClick={() =>
+                                    setPreviewMedia({
+                                      kind: "video",
+                                      url: generatedVideo.outputVideoUrl!,
+                                      title: `${generatedVideo.characterName} generated video`,
+                                    })
+                                  }
+                                  className="relative size-full outline-none focus-visible:brightness-90"
+                                >
+                                  <video
+                                    src={generatedVideo.outputVideoUrl}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    aria-hidden="true"
+                                    className="pointer-events-none size-full bg-black object-cover"
+                                  />
+                                  <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                                    <span className="grid size-11 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                                      <IconPlayerPlayFilled className="size-4" />
+                                    </span>
                                   </span>
+                                </button>
+                              ) : generatedVideo.characterImageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={generatedVideo.characterImageUrl}
+                                  alt=""
+                                  className={cn(
+                                    "size-full object-cover",
+                                    pending ? "opacity-40" : "opacity-55"
+                                  )}
+                                />
+                              ) : pending ? (
+                                <div className="size-full bg-muted-foreground/10" />
+                              ) : null}
+                              {pending ? (
+                                <>
+                                  <span className="sr-only">Generating video</span>
+                                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-muted/15">
+                                    <div className="video-processing-shimmer absolute inset-y-0 -left-2/3 w-2/3 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/15" />
+                                  </div>
+                                </>
+                              ) : null}
+                              {generatedVideo.status === "failed" ? (
+                                <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+                                  Failed
                                 </span>
-                              </button>
-                            ) : generatedVideo.characterImageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={generatedVideo.characterImageUrl}
-                                alt=""
-                                className={cn(
-                                  "size-full object-cover",
-                                  pending ? "opacity-40" : "opacity-55"
-                                )}
-                              />
-                            ) : pending ? (
-                              <div className="size-full bg-muted-foreground/10" />
-                            ) : null}
-                            {pending ? (
-                              <>
-                                <span className="sr-only">Generating video</span>
-                                <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-muted/15">
-                                  <div className="video-processing-shimmer absolute inset-y-0 -left-2/3 w-2/3 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/15" />
-                                </div>
-                              </>
-                            ) : null}
-                            {generatedVideo.status === "failed" ? (
-                              <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
-                                Failed
-                              </span>
-                            ) : null}
-                          </div>
-                        </article>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
+                              ) : null}
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </section>
           </div>
         )}
