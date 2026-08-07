@@ -2,6 +2,7 @@
 
 import { AccountMenu } from "@/components/account-menu"
 import { BrandMark } from "@/components/brand-mark"
+import { CreditBalance } from "@/components/credit-balance"
 
 export function StudioHeader({
   eyebrow,
@@ -32,6 +33,7 @@ export function StudioHeader({
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {action}
+        <CreditBalance className="md:hidden" />
         <div className="md:hidden">
           <AccountMenu placement="header" />
         </div>

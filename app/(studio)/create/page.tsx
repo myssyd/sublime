@@ -5,16 +5,18 @@ import Link from "next/link"
 import { useAction, useQuery } from "convex/react"
 import {
   IconArrowRight,
+  IconBolt,
   IconCheck,
   IconFileUpload,
   IconLink,
   IconLoader2,
   IconMovie,
+  IconPaperclip,
   IconPhoto,
-  IconPlayerPlayFilled,
   IconPlus,
   IconSparkles,
   IconVolume,
+  IconX,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
@@ -33,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useAssetUpload } from "@/lib/use-asset-upload"
 import { cn } from "@/lib/utils"
+import { imageCreditsForModel, videoCreditsForDuration } from "@/convex/billing"
 
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024
 const MIN_VIDEO_SECONDS = 3
@@ -49,6 +52,25 @@ type FetchedReel = {
   previewUrl: string
   reused: boolean
 }
+
+type VideoImageOption = {
+  key: string
+  url: string
+  label: string
+}
+
+type PictureAttachment = {
+  file: File
+  previewUrl: string
+}
+
+const MAX_PICTURE_ATTACHMENTS = 4
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+])
 
 const pictureModels = [
   {
@@ -151,6 +173,128 @@ function readVideoDuration(file: File) {
   })
 }
 
+function formatFileSize(bytes: number) {
+  const megabytes = bytes / 1024 / 1024
+  return megabytes >= 0.1
+    ? `${megabytes.toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
+function VideoReferencePair({
+  videoSrc,
+  videoTitle,
+  videoSource,
+  imageOptions,
+  selectedImage,
+  imagePickerOpen,
+  onToggleImagePicker,
+  onSelectImage,
+}: {
+  videoSrc: string
+  videoTitle: string
+  videoSource: string
+  imageOptions: VideoImageOption[]
+  selectedImage: VideoImageOption
+  imagePickerOpen: boolean
+  onToggleImagePicker: () => void
+  onSelectImage: (key: string) => void
+}) {
+  return (
+    <div className="mt-3">
+      <div className="relative grid grid-cols-2 gap-3">
+        <span className="sr-only">Combine this character look with this source motion</span>
+        <span
+          aria-hidden="true"
+          className="absolute left-1/2 top-[calc(50%+1rem)] z-10 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-card text-foreground shadow-md"
+        >
+          <IconPlus className="size-4" stroke={2} />
+        </span>
+        <div className="min-w-0">
+          <div className="flex h-6 items-center justify-between gap-2">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Character look
+            </p>
+            <button
+              type="button"
+              aria-expanded={imagePickerOpen}
+              aria-controls="video-image-options"
+              onClick={onToggleImagePicker}
+              className="shrink-0 text-xs font-semibold text-foreground underline-offset-4 hover:underline"
+            >
+              {imagePickerOpen ? "Done" : "Change"}
+            </button>
+          </div>
+          <div className="relative mt-2 aspect-[9/16] overflow-hidden rounded-2xl bg-muted shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={selectedImage.url}
+              alt={`${selectedImage.label} for the generated video`}
+              className="size-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8">
+              <p className="truncate text-xs font-medium text-white">{selectedImage.label}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex h-6 items-center justify-between gap-2">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Source motion
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">{videoSource}</p>
+          </div>
+          <div className="mt-2 aspect-[9/16] overflow-hidden rounded-2xl bg-muted shadow-sm">
+            <video
+              key={videoSrc}
+              src={videoSrc}
+              controls
+              playsInline
+              preload="metadata"
+              aria-label={`${videoTitle} preview`}
+              className="size-full object-cover"
+            >
+              Your browser does not support video playback.
+            </video>
+          </div>
+        </div>
+      </div>
+
+      {imagePickerOpen ? (
+        <div id="video-image-options" className="mt-3 rounded-2xl bg-muted/45 p-3">
+          <p className="text-xs font-medium">Choose the outfit and look to preserve</p>
+          <div className="mt-2.5 grid grid-cols-4 gap-2 sm:grid-cols-5">
+            {imageOptions.map((image) => {
+              const selected = image.key === selectedImage.key
+              return (
+                <button
+                  key={image.key}
+                  type="button"
+                  aria-pressed={selected}
+                  aria-label={`Use ${image.label}`}
+                  onClick={() => onSelectImage(image.key)}
+                  className={cn(
+                    "relative aspect-square overflow-hidden rounded-xl bg-muted ring-offset-2 ring-offset-card transition hover:opacity-90",
+                    selected && "ring-2 ring-primary"
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={image.url} alt="" className="size-full object-cover" />
+                  {selected ? (
+                    <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground">
+                      <IconCheck className="size-2.5" stroke={3} />
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export default function CreatePage() {
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
@@ -159,6 +303,8 @@ export default function CreatePage() {
   const importInstagramReel = useAction(api.videoImport.importInstagramReel)
   const uploadAsset = useAssetUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pictureFileInputRef = useRef<HTMLInputElement>(null)
+  const pictureAttachmentsRef = useRef<PictureAttachment[]>([])
   const reelImportAttemptRef = useRef(0)
   const importingReelUrlRef = useRef<string | null>(null)
   const [characterId, setCharacterId] = useState<Id<"characters"> | null>(null)
@@ -167,7 +313,10 @@ export default function CreatePage() {
   const [pictureModel, setPictureModel] = useState<PictureModel>("seedream-5")
   const [pictureAspectRatio, setPictureAspectRatio] =
     useState<PictureAspectRatio>("9:16")
+  const [pictureAttachments, setPictureAttachments] = useState<PictureAttachment[]>([])
   const [generatingPicture, setGeneratingPicture] = useState(false)
+  const [videoCharacterImageKey, setVideoCharacterImageKey] = useState<string | null>(null)
+  const [videoImagePickerOpen, setVideoImagePickerOpen] = useState(false)
   const [referenceSource, setReferenceSource] = useState<ReferenceSource>("instagram")
   const [video, setVideo] = useState<File | null>(null)
   const [videoDuration, setVideoDuration] = useState<number | null>(null)
@@ -191,14 +340,53 @@ export default function CreatePage() {
   )
   const selectedCharacterPictures = useMemo(() => {
     if (!selectedCharacter) return []
-    return [...(selectedCharacter.creationImageUrls ?? [])].reverse()
+    return [...(selectedCharacter.creationImages ?? [])].reverse()
   }, [selectedCharacter])
+  const videoImageOptions = useMemo<VideoImageOption[]>(() => {
+    if (!selectedCharacter?.primaryImageKey || !selectedCharacter.primaryImageUrl) {
+      return []
+    }
+    const options: VideoImageOption[] = [
+      {
+        key: selectedCharacter.primaryImageKey,
+        url: selectedCharacter.primaryImageUrl,
+        label: "Original look",
+      },
+    ]
+    selectedCharacter.referenceImageKeys.forEach((key, index) => {
+      const url = selectedCharacter.referenceImageUrls[index]
+      if (!url) return
+      options.push({
+        key,
+        url,
+        label: index === 0 ? "Three-quarter look" : index === 1 ? "Full-body look" : `Reference ${index + 1}`,
+      })
+    })
+    selectedCharacterPictures.forEach((picture, index) => {
+      options.push({
+        key: picture.key,
+        url: picture.url,
+        label: `Created look ${selectedCharacterPictures.length - index}`,
+      })
+    })
+    return options
+  }, [selectedCharacter, selectedCharacterPictures])
+  const selectedVideoImage =
+    videoImageOptions.find((image) => image.key === videoCharacterImageKey) ??
+    videoImageOptions[0] ??
+    null
   const canonicalReelUrl = canonicalInstagramReelUrl(reelUrl)
   const reelUrlValid = canonicalReelUrl !== null
   const hasReference =
     referenceSource === "upload"
       ? video !== null && videoDuration !== null
       : fetchedReel?.sourceUrl === canonicalReelUrl
+  const pictureCreditCost = imageCreditsForModel(pictureModel)
+  const selectedVideoDuration =
+    referenceSource === "instagram" ? fetchedReel?.durationSeconds : videoDuration
+  const videoCreditCost = selectedVideoDuration
+    ? videoCreditsForDuration(selectedVideoDuration)
+    : null
 
   async function importReel(sourceUrl: string) {
     if (
@@ -256,6 +444,66 @@ export default function CreatePage() {
     [videoPreviewUrl]
   )
 
+  useEffect(
+    () => () => {
+      pictureAttachmentsRef.current.forEach(({ previewUrl }) =>
+        URL.revokeObjectURL(previewUrl)
+      )
+    },
+    []
+  )
+
+  function replacePictureAttachments(nextAttachments: PictureAttachment[]) {
+    pictureAttachmentsRef.current = nextAttachments
+    setPictureAttachments(nextAttachments)
+  }
+
+  function clearPictureAttachments() {
+    pictureAttachmentsRef.current.forEach(({ previewUrl }) =>
+      URL.revokeObjectURL(previewUrl)
+    )
+    replacePictureAttachments([])
+    if (pictureFileInputRef.current) pictureFileInputRef.current.value = ""
+  }
+
+  function choosePictureAttachments(list: FileList | null) {
+    const available = MAX_PICTURE_ATTACHMENTS - pictureAttachments.length
+    const selected = Array.from(list ?? []).slice(0, available)
+    if (!selected.length) {
+      if (pictureAttachments.length >= MAX_PICTURE_ATTACHMENTS) {
+        toast.error(`Use up to ${MAX_PICTURE_ATTACHMENTS} reference images`)
+      }
+      return
+    }
+    const invalid = selected.find(
+      (file) =>
+        !ALLOWED_IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_BYTES
+    )
+    if (invalid) {
+      toast.error("Use JPG, PNG, or WebP files smaller than 15 MB")
+      return
+    }
+    const existing = new Set(
+      pictureAttachments.map(({ file }) =>
+        `${file.name}:${file.size}:${file.lastModified}`
+      )
+    )
+    const additions = selected
+      .filter(
+        (file) =>
+          !existing.has(`${file.name}:${file.size}:${file.lastModified}`)
+      )
+      .map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))
+    replacePictureAttachments([...pictureAttachments, ...additions])
+  }
+
+  function removePictureAttachment(previewUrl: string) {
+    URL.revokeObjectURL(previewUrl)
+    replacePictureAttachments(
+      pictureAttachments.filter((image) => image.previewUrl !== previewUrl)
+    )
+  }
+
   async function chooseVideo(file: File | undefined) {
     if (!file) return
     const extension = file.name.split(".").pop()?.toLowerCase()
@@ -289,13 +537,21 @@ export default function CreatePage() {
     if (!activeCharacterId || !picturePrompt.trim()) return
     setGeneratingPicture(true)
     try {
+      const attachmentGroupId = crypto.randomUUID()
+      const attachmentImageKeys = await Promise.all(
+        pictureAttachments.map(({ file }) =>
+          uploadAsset(file, "picture-reference", attachmentGroupId)
+        )
+      )
       await generatePicture({
         characterId: activeCharacterId,
         prompt: picturePrompt,
         model: pictureModel,
         aspectRatio: pictureAspectRatio,
+        attachmentImageKeys,
       })
       setPicturePrompt("")
+      clearPictureAttachments()
       toast.success("Picture created", {
         description: `It has been added to ${selectedCharacter?.name ?? "your character"}'s studio.`,
       })
@@ -309,7 +565,7 @@ export default function CreatePage() {
   }
 
   async function handleGenerateVideo() {
-    if (!activeCharacterId || !hasReference) return
+    if (!activeCharacterId || !hasReference || !selectedVideoImage) return
     setSubmitting(true)
     try {
       const groupId = crypto.randomUUID()
@@ -335,6 +591,7 @@ export default function CreatePage() {
 
       await createVideo({
         characterId: activeCharacterId,
+        characterImageKey: selectedVideoImage.key,
         sourceVideoKey,
         sourceFileName,
         sourceKind: referenceSource,
@@ -411,7 +668,11 @@ export default function CreatePage() {
                         type="button"
                         aria-pressed={active}
                         aria-label={`${active ? "Selected character" : "Select character"}: ${character.name}`}
-                        onClick={() => setCharacterId(character._id)}
+                        onClick={() => {
+                          setCharacterId(character._id)
+                          setVideoCharacterImageKey(null)
+                          setVideoImagePickerOpen(false)
+                        }}
                         className="group w-12 shrink-0 text-center"
                       >
                         <span
@@ -494,7 +755,64 @@ export default function CreatePage() {
                       placeholder={`Put ${selectedCharacter?.name ?? "the character"} in a sunlit café, candid expression, warm editorial photography…`}
                       className="mt-2 min-h-32 resize-none"
                     />
-                    <div className="mt-5 grid grid-cols-2 gap-3 border-t pt-5">
+
+                    <input
+                      ref={pictureFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        choosePictureAttachments(event.target.files)
+                        event.currentTarget.value = ""
+                      }}
+                    />
+                    <div className="mt-3">
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={
+                            generatingPicture ||
+                            pictureAttachments.length >= MAX_PICTURE_ATTACHMENTS
+                          }
+                          onClick={() => pictureFileInputRef.current?.click()}
+                          className="shrink-0"
+                        >
+                          <IconPaperclip className="size-3.5" /> Attach images
+                        </Button>
+                        <p className="text-[11px] leading-4 text-muted-foreground">
+                          Guide the outfit, pose, or setting · up to {MAX_PICTURE_ATTACHMENTS}
+                        </p>
+                      </div>
+
+                      {pictureAttachments.length ? (
+                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Attached image references">
+                          {pictureAttachments.map(({ file, previewUrl }, index) => (
+                            <div key={previewUrl} className="group relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={previewUrl}
+                                alt={`Attached reference ${index + 1}: ${file.name}`}
+                                className="size-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                aria-label={`Remove ${file.name}`}
+                                disabled={generatingPicture}
+                                onClick={() => removePictureAttachment(previewUrl)}
+                                className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-black/65 text-white transition hover:bg-black/80 disabled:opacity-50"
+                              >
+                                <IconX className="size-3" stroke={2.5} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-10 grid grid-cols-2 gap-3">
                       <div className="min-w-0">
                         <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Model
@@ -584,8 +902,14 @@ export default function CreatePage() {
                       onClick={handleGeneratePicture}
                       disabled={!selectedCharacter || picturePrompt.trim().length < 3 || generatingPicture}
                     >
-                      {generatingPicture ? <IconLoader2 className="size-5 animate-spin" /> : <IconSparkles className="size-4" />}
+                      {generatingPicture ? <IconLoader2 className="size-5 animate-spin" /> : null}
                       {generatingPicture ? "Creating picture…" : "Create picture"}
+                      {!generatingPicture ? (
+                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                          {pictureCreditCost}
+                        </span>
+                      ) : null}
                     </Button>
                     <p className="mt-2 text-center text-[11px] text-muted-foreground">
                       {pictureModels.find((model) => model.value === pictureModel)?.label} · {pictureAspectRatio} · usually takes about a minute
@@ -605,7 +929,7 @@ export default function CreatePage() {
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">Add a short performance for {selectedCharacter?.name} to recreate.</p>
                     </div>
 
-                    <div className="mt-5 border-t pt-5">
+                    <div className="mt-10">
                       <div className="flex items-center justify-between gap-3">
                         <label htmlFor="reel-url" className="flex items-center gap-2 text-sm font-semibold">
                           <IconMovie className="size-4 text-muted-foreground" /> Source video
@@ -634,15 +958,26 @@ export default function CreatePage() {
                       </div>
 
                       {referenceSource === "upload" && video ? (
-                        <div className="mt-3 overflow-hidden rounded-2xl border bg-muted/20">
-                          {videoPreviewUrl ? (
-                            <video key={videoPreviewUrl} src={videoPreviewUrl} controls playsInline preload="metadata" className="max-h-52 w-full bg-black object-contain" />
-                          ) : null}
-                          <div className="min-w-0 px-3 py-2.5">
-                            <p className="truncate text-xs font-medium">{video.name}</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{videoDuration?.toFixed(1)} sec · {(video.size / 1024 / 1024).toFixed(1)} MB</p>
-                          </div>
-                        </div>
+                        videoPreviewUrl && videoDuration !== null && selectedVideoImage ? (
+                          <>
+                            <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400">
+                              <IconCheck className="size-3.5" /> Video ready · {videoDuration.toFixed(1)} sec · {formatFileSize(video.size)}
+                            </p>
+                            <VideoReferencePair
+                              videoSrc={videoPreviewUrl}
+                              videoTitle={video.name}
+                              videoSource="Upload"
+                              imageOptions={videoImageOptions}
+                              selectedImage={selectedVideoImage}
+                              imagePickerOpen={videoImagePickerOpen}
+                              onToggleImagePicker={() => setVideoImagePickerOpen((open) => !open)}
+                              onSelectImage={(key) => {
+                                setVideoCharacterImageKey(key)
+                                setVideoImagePickerOpen(false)
+                              }}
+                            />
+                          </>
+                        ) : null
                       ) : (
                         <>
                           <div className="relative mt-3">
@@ -673,27 +1008,43 @@ export default function CreatePage() {
                               </span>
                             ) : null}
                           </div>
-                          <div id="reel-status" aria-live="polite" className="mt-2 min-h-5">
-                            {fetchingReel ? (
-                              <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><IconLoader2 className="size-3.5 animate-spin" /> Loading video…</p>
-                            ) : reelError ? (
-                              <p className="text-xs text-destructive">Couldn&apos;t load this Reel. Check that it&apos;s public and 3–10 seconds long.</p>
-                            ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
-                              <p className="flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400"><IconCheck className="size-3.5" /> Video ready · {fetchedReel.durationSeconds.toFixed(1)} sec</p>
-                            ) : reelUrl.trim().length > 0 && !reelUrlValid ? (
-                              <p className="text-xs text-destructive">Paste a link like instagram.com/reel/…</p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">Loads automatically · public Reels · 3–10 sec</p>
-                            )}
-                          </div>
-                          {fetchedReel?.sourceUrl === canonicalReelUrl ? (
-                            <video key={fetchedReel.previewUrl} src={fetchedReel.previewUrl} controls playsInline preload="metadata" className="mt-2 max-h-48 w-full rounded-2xl bg-black object-contain" />
+                          {fetchingReel ? (
+                            <span id="reel-status" aria-live="polite" className="sr-only">
+                              Loading video…
+                            </span>
+                          ) : (
+                            <div id="reel-status" aria-live="polite" className="mt-2 min-h-5">
+                              {reelError ? (
+                                <p className="text-xs text-destructive">Couldn&apos;t load this Reel. Check that it&apos;s public and 3–10 seconds long.</p>
+                              ) : fetchedReel?.sourceUrl === canonicalReelUrl ? (
+                                <p className="flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400"><IconCheck className="size-3.5" /> Video ready · {fetchedReel.durationSeconds.toFixed(1)} sec · {formatFileSize(fetchedReel.fileSize)}</p>
+                              ) : reelUrl.trim().length > 0 && !reelUrlValid ? (
+                                <p className="text-xs text-destructive">Paste a link like instagram.com/reel/…</p>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">Loads automatically · public Reels · 3–10 sec</p>
+                              )}
+                            </div>
+                          )}
+                          {fetchedReel?.sourceUrl === canonicalReelUrl && selectedVideoImage ? (
+                            <VideoReferencePair
+                              videoSrc={fetchedReel.previewUrl}
+                              videoTitle="Instagram Reel"
+                              videoSource="Instagram"
+                              imageOptions={videoImageOptions}
+                              selectedImage={selectedVideoImage}
+                              imagePickerOpen={videoImagePickerOpen}
+                              onToggleImagePicker={() => setVideoImagePickerOpen((open) => !open)}
+                              onSelectImage={(key) => {
+                                setVideoCharacterImageKey(key)
+                                setVideoImagePickerOpen(false)
+                              }}
+                            />
                           ) : null}
                         </>
                       )}
                     </div>
 
-                    <div className="mt-5 border-t pt-5">
+                    <div className="mt-10">
                       <label htmlFor="direction" className="text-sm font-semibold">Direction <span className="font-normal text-muted-foreground">· optional</span></label>
                       <Textarea id="direction" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Keep the outfit, change the lighting, add wind…" className="mt-3 min-h-24 resize-none" />
                     </div>
@@ -718,9 +1069,15 @@ export default function CreatePage() {
                       </button>
                     </div>
 
-                    <Button size="lg" className="mt-4 w-full text-sm" onClick={handleGenerateVideo} disabled={!selectedCharacter || !hasReference || submitting || fetchingReel}>
-                      {submitting ? <IconLoader2 className="size-5 animate-spin" /> : <IconPlayerPlayFilled className="size-4" />}
+                    <Button size="lg" className="mt-4 w-full text-sm" onClick={handleGenerateVideo} disabled={!selectedCharacter || !selectedVideoImage || !hasReference || submitting || fetchingReel}>
+                      {submitting ? <IconLoader2 className="size-5 animate-spin" /> : null}
                       {submitting ? (referenceSource === "instagram" ? "Queuing clone…" : "Uploading & queuing…") : "Create video"}
+                      {!submitting && videoCreditCost ? (
+                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                          {videoCreditCost}
+                        </span>
+                      ) : null}
                     </Button>
                     <p className="mt-2 text-center text-[11px] text-muted-foreground">Kling O3 Pro · usually takes several minutes</p>
                   </TabsContent>
@@ -759,10 +1116,10 @@ export default function CreatePage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3">
-                    {selectedCharacterPictures.map((imageUrl, index) => (
-                      <article key={imageUrl} className="group relative aspect-square overflow-hidden rounded-sm bg-muted">
+                    {selectedCharacterPictures.map((picture, index) => (
+                      <article key={picture.key} className="group relative aspect-square overflow-hidden rounded-sm bg-muted">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={imageUrl} alt={`${selectedCharacter?.name ?? "Character"} photo ${index + 1}`} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
+                        <img src={picture.url} alt={`${selectedCharacter?.name ?? "Character"} photo ${index + 1}`} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                       </article>
                     ))}

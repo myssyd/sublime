@@ -151,6 +151,7 @@ async function validateInstagramSource(
 export const createAndQueue = action({
   args: {
     characterId: v.id("characters"),
+    characterImageKey: v.string(),
     sourceVideoKey: v.string(),
     sourceFileName: v.string(),
     sourceKind: v.union(v.literal("upload"), v.literal("instagram")),
@@ -175,6 +176,15 @@ export const createAndQueue = action({
     ) {
       throw new Error("Character not found")
     }
+    const allowedCharacterImageKeys = new Set([
+      character.primaryImageKey,
+      ...character.referenceImageKeys,
+      ...(character.creationImages ?? []).map((image) => image.key),
+      ...(character.creationImageKeys ?? []),
+    ])
+    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+      throw new Error("Selected character image not found")
+    }
 
     const source =
       args.sourceKind === "upload"
@@ -194,6 +204,7 @@ export const createAndQueue = action({
       return await ctx.runMutation(internal.videos.internalCreateAndQueue, {
         userId: user._id,
         characterId: args.characterId,
+        characterImageKey: args.characterImageKey,
         ...source,
         prompt,
         keepAudio: args.keepAudio,

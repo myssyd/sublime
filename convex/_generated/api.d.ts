@@ -10,12 +10,15 @@
 
 import type * as assets from "../assets.js";
 import type * as auth from "../auth.js";
+import type * as billing from "../billing.js";
 import type * as characterGeneration from "../characterGeneration.js";
 import type * as characters from "../characters.js";
+import type * as credits from "../credits.js";
 import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
 import type * as lib_instagram from "../lib/instagram.js";
 import type * as lib_videoValidation from "../lib/videoValidation.js";
+import type * as stripe from "../stripe.js";
 import type * as videoGeneration from "../videoGeneration.js";
 import type * as videoImport from "../videoImport.js";
 import type * as videoSources from "../videoSources.js";
@@ -31,12 +34,15 @@ import type {
 declare const fullApi: ApiFromModules<{
   assets: typeof assets;
   auth: typeof auth;
+  billing: typeof billing;
   characterGeneration: typeof characterGeneration;
   characters: typeof characters;
+  credits: typeof credits;
   http: typeof http;
   jobs: typeof jobs;
   "lib/instagram": typeof lib_instagram;
   "lib/videoValidation": typeof lib_videoValidation;
+  stripe: typeof stripe;
   videoGeneration: typeof videoGeneration;
   videoImport: typeof videoImport;
   videoSources: typeof videoSources;
@@ -74,4 +80,5 @@ export declare const components: {
   betterAuth: import("../betterAuth/_generated/component.js").ComponentApi<"betterAuth">;
   videoPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"videoPool">;
   r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
+  stripe: import("@convex-dev/stripe/_generated/component.js").ComponentApi<"stripe">;
 };

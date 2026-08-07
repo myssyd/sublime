@@ -6,6 +6,7 @@ Sublime is an AI character studio for building reusable virtual characters and c
 
 - Next.js 16, React 19, TypeScript
 - Convex with Better Auth, R2, and Workpool components
+- Stripe subscriptions, prepaid top-ups, and an auditable Convex credit ledger
 - Seedream 5 Pro character generation and Kling O3 Pro video cloning through fal.ai
 - Tailwind CSS 4 and shadcn-compatible UI primitives
 - Bun for all package and script commands
@@ -31,6 +32,25 @@ duration, size, and import coordination live in Convex's `videoSources` table.
 
 The production Cobalt deployment for Sublime lives in `deploy/cobalt-cloudflare` and runs on Cloudflare Containers behind `cobalt.sublime.kiwi`.
 
+## Billing and credits
+
+Sublime has paid plans only. Starter is $19/month for 700 credits, Creator is
+$49/month for 2,000 credits, and Pro is $99/month for 4,500 credits. Annual
+plans cost ten months and grant twelve months of credits upfront. Existing
+subscribers can add 600 non-expiring credits for $15.
+
+Credit rates are centralized in `convex/billing.ts`: Nano Banana photos cost 5,
+Seedream photos cost 10, complete three-image character builds cost 30, and
+Kling O3 Pro video clones cost 20 credits per rounded-up source second. Credits
+are reserved before a provider call, charged once the provider succeeds, and
+released on provider failure. Subscription credits are spent before top-up
+credits and unused subscription credits expire at renewal; top-up credits do
+not expire while the account remains usable.
+
+Configure every Stripe value shown in `.env.example` in the Convex environment
+with `bunx convex env set`. Never add Stripe secrets to `NEXT_PUBLIC_*` values.
+Stripe should deliver webhooks to the Convex site URL at `/stripe/webhook`.
+
 ## Useful commands
 
 ```bash
@@ -46,6 +66,7 @@ bunx vercel --prod
 - `/characters` guides users from a prompt or source photos through hero approval and a Seedream-generated Kling reference pack.
 - `/create` combines a character with an uploaded video or public Instagram Reel and queues a Kling video-to-video clone.
 - `/library` tracks queued, generating, completed, and failed clones.
+- `/billing` handles paid plans, top-ups, credit balance, and the customer portal.
 - `/settings` manages the signed-in account and app appearance.
 
 Generated media is stored in the `sublime` R2 bucket under per-user `characters` and `videos` prefixes. Convex contains the product tables `characters`, `videoSources`, `videos`, and `usage`, plus tables owned internally by mounted components.

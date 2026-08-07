@@ -24,6 +24,8 @@ export const generateClone = internalAction({
   args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
     const startedAt = Date.now()
+    let providerSucceeded = false
+    let reservationKey: string | undefined
     await ctx.runMutation(internal.videos.internalSetProcessing, {
       videoId: args.videoId,
     })
@@ -37,14 +39,21 @@ export const generateClone = internalAction({
         internal.videos.internalGetGenerationContext,
         { videoId: args.videoId }
       )
+      reservationKey = video.creditReservationKey
+      if (!reservationKey) throw new Error("Video credit reservation is missing")
       if (!character.primaryImageKey) {
         throw new Error("Character has no approved hero image")
       }
-      const [sourceVideoUrl, primaryImageUrl, ...supportingImageUrls] =
+      const characterImageKey = video.characterImageKey ?? character.primaryImageKey
+      const supportingImageKeys = [
+        character.primaryImageKey,
+        ...character.referenceImageKeys,
+      ].filter((key) => key !== characterImageKey)
+      const [sourceVideoUrl, characterImageUrl, ...supportingImageUrls] =
         await Promise.all([
           r2.getUrl(video.sourceVideoKey, { expiresIn: 60 * 60 }),
-          r2.getUrl(character.primaryImageKey, { expiresIn: 60 * 60 }),
-          ...character.referenceImageKeys.map((key) =>
+          r2.getUrl(characterImageKey, { expiresIn: 60 * 60 }),
+          ...supportingImageKeys.map((key) =>
             r2.getUrl(key, { expiresIn: 60 * 60 })
           ),
         ])
@@ -52,6 +61,7 @@ export const generateClone = internalAction({
       const direction = [
         "Replace the main on-camera person in the reference video with @Element1.",
         "Preserve the original performance exactly: choreography, timing, body motion, framing, camera movement, lighting, environment, cuts, and pacing.",
+        "Use the exact outfit, styling, and accessories shown in @Element1's frontal image. Treat that chosen image as the source of truth for wardrobe; supporting references are for identity and body consistency only.",
         "Keep @Element1's face, hair, skin tone, body proportions, and wardrobe identity consistent in every frame.",
         "Render photorealistically with stable hands, clean occlusions, natural motion blur, and no identity drift.",
         character.identityPrompt,
@@ -68,7 +78,7 @@ export const generateClone = internalAction({
           shot_type: "customize",
           elements: [
             {
-              frontal_image_url: primaryImageUrl,
+              frontal_image_url: characterImageUrl,
               reference_image_urls: supportingImageUrls,
             },
           ],
@@ -79,6 +89,20 @@ export const generateClone = internalAction({
       const outputUrl =
         result.data?.video?.url ?? result.data?.videos?.[0]?.url ?? null
       if (!outputUrl) throw new Error("Kling returned no output video")
+
+      await ctx.runMutation(internal.credits.recordProviderSuccess, {
+        reservationKey,
+        operation: "video_clone",
+        model: KLING_CLONE_MODEL,
+        providerRequestId: result.requestId,
+        elapsedMs: Date.now() - startedAt,
+      })
+      providerSucceeded = true
+      await ctx.runMutation(internal.videos.internalMarkProviderSuccess, {
+        videoId: args.videoId,
+        providerRequestId: result.requestId,
+        providerOutputUrl: outputUrl,
+      })
 
       const response = await fetch(outputUrl)
       if (!response.ok) {
@@ -102,6 +126,15 @@ export const generateClone = internalAction({
       })
     } catch (error) {
       const message = errorMessage(error).slice(0, 1500)
+      if (!providerSucceeded && reservationKey) {
+        await ctx.runMutation(internal.credits.recordProviderFailure, {
+          reservationKey,
+          operation: "video_clone",
+          model: KLING_CLONE_MODEL,
+          elapsedMs: Date.now() - startedAt,
+          reason: message,
+        })
+      }
       await ctx.runMutation(internal.videos.internalFail, {
         videoId: args.videoId,
         error: message,

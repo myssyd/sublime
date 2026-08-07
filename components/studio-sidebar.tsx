@@ -4,18 +4,21 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   IconAdjustments,
+  IconBolt,
   IconHomeSpark,
   IconLibraryPhoto,
   IconUsers,
 } from "@tabler/icons-react"
 import { AccountMenu } from "@/components/account-menu"
 import { BrandMark } from "@/components/brand-mark"
+import { CreditBalance } from "@/components/credit-balance"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/create", label: "Create", icon: IconHomeSpark },
   { href: "/characters", label: "Characters", icon: IconUsers },
   { href: "/library", label: "Library", icon: IconLibraryPhoto },
+  { href: "/billing", label: "Credits", icon: IconBolt },
   { href: "/settings", label: "Settings", icon: IconAdjustments },
 ]
 
@@ -56,10 +59,11 @@ export function StudioSidebar() {
             )
           })}
         </nav>
+        <CreditBalance className="mb-2 max-w-[64px] px-2" />
         <AccountMenu placement="sidebar" />
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t bg-background/95 px-2 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t bg-background/95 px-2 backdrop-blur md:hidden">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
           const Icon = item.icon

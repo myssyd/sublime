@@ -8,6 +8,7 @@ export type AssetKind =
   | "character-source"
   | "character-primary"
   | "character-reference"
+  | "picture-reference"
   | "video-source"
 
 export function useAssetUpload() {

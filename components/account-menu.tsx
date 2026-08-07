@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Menu } from "@base-ui/react/menu"
 import {
   IconChevronUp,
+  IconCreditCard,
   IconLoader2,
   IconLogout,
   IconUserCircle,
@@ -75,6 +76,15 @@ export function AccountMenu({ placement }: { placement: "sidebar" | "header" }) 
             >
               <IconUserCircle className="size-4 text-muted-foreground" stroke={1.8} />
               Profile
+            </Menu.LinkItem>
+
+            <Menu.LinkItem
+              render={<Link href="/billing" />}
+              closeOnClick
+              className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none data-highlighted:bg-muted"
+            >
+              <IconCreditCard className="size-4 text-muted-foreground" stroke={1.8} />
+              Billing & credits
             </Menu.LinkItem>
 
             <Menu.Separator className="my-1 h-px bg-border" />

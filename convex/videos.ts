@@ -1,8 +1,11 @@
 import { v } from "convex/values"
+import { paginationOptsValidator } from "convex/server"
 import { authComponent } from "./auth"
 import { publicAssetUrl } from "./assets"
 import { videoPool } from "./jobs"
 import { internal } from "./_generated/api"
+import { videoCreditsForDuration } from "./billing"
+import { reserveCredits } from "./credits"
 import {
   internalMutation,
   internalQuery,
@@ -22,11 +25,13 @@ export const list = query({
     return Promise.all(
       videos.map(async (video) => {
         const character = await ctx.db.get(video.characterId)
+        const characterImageKey =
+          video.characterImageKey ?? character?.primaryImageKey
         return {
           ...video,
           characterName: character?.name ?? "Deleted character",
-          characterImageUrl: character?.primaryImageKey
-            ? publicAssetUrl(character.primaryImageKey)
+          characterImageUrl: characterImageKey
+            ? publicAssetUrl(characterImageKey)
             : null,
           sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
           outputVideoUrl: video.outputVideoKey
@@ -38,10 +43,63 @@ export const list = query({
   },
 })
 
+export const listPage = query({
+  args: {
+    characterId: v.optional(v.id("characters")),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: "",
+      }
+    }
+
+    const videos = args.characterId
+      ? ctx.db
+          .query("videos")
+          .withIndex("by_user_character", (q) =>
+            q.eq("userId", user._id).eq("characterId", args.characterId!)
+          )
+          .order("desc")
+      : ctx.db
+          .query("videos")
+          .withIndex("by_user", (q) => q.eq("userId", user._id))
+          .order("desc")
+    const result = await videos.paginate(args.paginationOpts)
+
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map(async (video) => {
+          const character = await ctx.db.get(video.characterId)
+          const characterImageKey =
+            video.characterImageKey ?? character?.primaryImageKey
+          return {
+            ...video,
+            characterName: character?.name ?? "Deleted character",
+            characterImageUrl: characterImageKey
+              ? publicAssetUrl(characterImageKey)
+              : null,
+            sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
+            outputVideoUrl: video.outputVideoKey
+              ? publicAssetUrl(video.outputVideoKey)
+              : null,
+          }
+        })
+      ),
+    }
+  },
+})
+
 export const internalCreateAndQueue = internalMutation({
   args: {
     userId: v.string(),
     characterId: v.id("characters"),
+    characterImageKey: v.string(),
     sourceVideoKey: v.string(),
     sourceFileName: v.string(),
     sourceKind: v.union(v.literal("upload"), v.literal("instagram")),
@@ -61,6 +119,15 @@ export const internalCreateAndQueue = internalMutation({
     ) {
       throw new Error("Character not found")
     }
+    const allowedCharacterImageKeys = new Set([
+      character.primaryImageKey,
+      ...character.referenceImageKeys,
+      ...(character.creationImages ?? []).map((image) => image.key),
+      ...(character.creationImageKeys ?? []),
+    ])
+    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+      throw new Error("Selected character image not found")
+    }
     if (
       args.sourceDurationSeconds < 3 ||
       args.sourceDurationSeconds > 10
@@ -74,6 +141,7 @@ export const internalCreateAndQueue = internalMutation({
     const videoId = await ctx.db.insert("videos", {
       userId: args.userId,
       characterId: args.characterId,
+      characterImageKey: args.characterImageKey,
       sourceVideoKey: args.sourceVideoKey,
       sourceFileName: args.sourceFileName,
       sourceKind: args.sourceKind,
@@ -87,6 +155,19 @@ export const internalCreateAndQueue = internalMutation({
       createdAt: now,
       updatedAt: now,
     })
+    const creditReservationKey = `video-clone:${videoId}`
+    const credits = videoCreditsForDuration(args.sourceDurationSeconds)
+    await reserveCredits(ctx, {
+      userId: args.userId,
+      credits,
+      reservationKey: creditReservationKey,
+      kind: "video_clone",
+      refId: videoId,
+    })
+    await ctx.db.patch(videoId, {
+      creditReservationKey,
+      creditsCharged: credits,
+    })
     await videoPool.enqueueAction(
       ctx,
       internal.videoGeneration.generateClone,
@@ -94,6 +175,21 @@ export const internalCreateAndQueue = internalMutation({
       { retry: false }
     )
     return videoId
+  },
+})
+
+export const internalMarkProviderSuccess = internalMutation({
+  args: {
+    videoId: v.id("videos"),
+    providerRequestId: v.optional(v.string()),
+    providerOutputUrl: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.videoId, {
+      providerRequestId: args.providerRequestId,
+      providerOutputUrl: args.providerOutputUrl,
+      updatedAt: Date.now(),
+    })
   },
 })
 
@@ -133,17 +229,8 @@ export const internalComplete = internalMutation({
       status: "completed",
       outputVideoKey: args.outputVideoKey,
       providerRequestId: args.providerRequestId,
+      providerOutputUrl: undefined,
       updatedAt: Date.now(),
-    })
-    await ctx.db.insert("usage", {
-      userId: video.userId,
-      operation: "video_clone",
-      provider: "fal",
-      model: "fal-ai/kling-video/o3/pro/video-to-video/edit",
-      status: "completed",
-      providerRequestId: args.providerRequestId,
-      elapsedMs: args.elapsedMs,
-      createdAt: Date.now(),
     })
   },
 })
@@ -161,15 +248,6 @@ export const internalFail = internalMutation({
       status: "failed",
       error: args.error,
       updatedAt: Date.now(),
-    })
-    await ctx.db.insert("usage", {
-      userId: video.userId,
-      operation: "video_clone",
-      provider: "fal",
-      model: "fal-ai/kling-video/o3/pro/video-to-video/edit",
-      status: "failed",
-      elapsedMs: args.elapsedMs,
-      createdAt: Date.now(),
     })
   },
 })

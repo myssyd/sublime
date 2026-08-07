@@ -1,42 +1,481 @@
 "use client"
 
-import { useQuery } from "convex/react"
-import { IconAlertTriangle, IconLoader2, IconMovie } from "@tabler/icons-react"
+import { useMemo, useState } from "react"
+import Link from "next/link"
+import { Dialog } from "@base-ui/react/dialog"
+import { usePaginatedQuery, useQuery } from "convex/react"
+import {
+  IconAlertTriangle,
+  IconArrowRight,
+  IconCheck,
+  IconDownload,
+  IconLoader2,
+  IconMovie,
+  IconPhoto,
+  IconPlayerPlayFilled,
+  IconX,
+} from "@tabler/icons-react"
 import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
+type MediaFilter = "all" | "photos" | "videos"
+type CharacterFilter = "all" | Id<"characters">
+
+type PhotoItem = {
+  kind: "photo"
+  key: string
+  url: string
+  prompt: string
+  model: "seedream-5" | "nano-banana" | null
+  aspectRatio:
+    | "21:9"
+    | "16:9"
+    | "3:2"
+    | "4:3"
+    | "5:4"
+    | "1:1"
+    | "4:5"
+    | "3:4"
+    | "2:3"
+    | "9:16"
+    | null
+  createdAt: number
+  characterId: Id<"characters">
+  characterName: string
+  characterImageUrl: string | null
+}
+
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+})
+
+function formatDate(timestamp: number) {
+  return dateFormatter.format(new Date(timestamp))
+}
+
+function modelLabel(model: PhotoItem["model"]) {
+  if (model === "seedream-5") return "Seedream 5"
+  if (model === "nano-banana") return "Nano Banana"
+  return "Generated photo"
+}
 
 export default function LibraryPage() {
-  const videos = useQuery(api.videos.list)
+  const characters = useQuery(api.characters.list)
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all")
+  const [characterFilter, setCharacterFilter] =
+    useState<CharacterFilter>("all")
+  const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null)
+  const { results: videos, status, loadMore } = usePaginatedQuery(
+    api.videos.listPage,
+    {
+      characterId:
+        characterFilter === "all" ? undefined : characterFilter,
+    },
+    { initialNumItems: 24 }
+  )
+
+  const photos = useMemo<PhotoItem[]>(() => {
+    return (characters ?? [])
+      .flatMap((character) =>
+        (character.creationImages ?? []).map((photo) => ({
+          kind: "photo" as const,
+          ...photo,
+          characterId: character._id,
+          characterName: character.name,
+          characterImageUrl: character.primaryImageUrl,
+        }))
+      )
+      .filter(
+        (photo) =>
+          characterFilter === "all" ||
+          photo.characterId === characterFilter
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)
+  }, [characterFilter, characters])
+
+  const items = useMemo(() => {
+    if (mediaFilter === "photos") return photos
+    const videoItems = videos.map((video) => ({
+      kind: "video" as const,
+      ...video,
+    }))
+    if (mediaFilter === "videos") return videoItems
+    return [...photos, ...videoItems].sort(
+      (a, b) => b.createdAt - a.createdAt
+    )
+  }, [mediaFilter, photos, videos])
+
+  const videosHaveMore = status === "CanLoadMore" || status === "LoadingMore"
+  const initialLoading =
+    characters === undefined || status === "LoadingFirstPage"
+  const selectedCharacter =
+    characterFilter === "all"
+      ? null
+      : characters?.find((character) => character._id === characterFilter)
+  const emptyLabel = selectedCharacter
+    ? `${selectedCharacter.name} has no ${mediaFilter === "all" ? "content" : mediaFilter} yet`
+    : `No ${mediaFilter === "all" ? "content" : mediaFilter} yet`
 
   return (
     <div className="min-h-screen">
-      <StudioHeader eyebrow="Output" title="Video library" description="Every performance cloned with your Sublime characters, including work still processing." />
-      <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 lg:px-10 lg:py-10">
-        {videos === undefined ? (
-          <div className="grid min-h-80 place-items-center"><IconLoader2 className="size-6 animate-spin text-muted-foreground" /></div>
-        ) : videos.length === 0 ? (
-          <div className="grid min-h-96 place-items-center rounded-2xl border border-dashed bg-card/60 p-8 text-center"><div><IconMovie className="mx-auto size-9 text-muted-foreground" /><h2 className="mt-3 font-semibold">No videos yet</h2><p className="mt-1 text-sm text-muted-foreground">Your first clone will appear here as soon as you queue it.</p></div></div>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {videos.map((video) => (
-              <article key={video._id} className="overflow-hidden rounded-2xl border bg-card">
-                <div className="relative aspect-[9/16] bg-[#171914]">
-                  {video.outputVideoUrl ? (
-                    <video src={video.outputVideoUrl} controls playsInline preload="metadata" className="size-full object-cover" />
-                  ) : video.characterImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={video.characterImageUrl} alt="" className="size-full object-cover opacity-50" />
-                  ) : null}
-                  {!video.outputVideoUrl ? (
-                    <div className="absolute inset-0 grid place-items-center bg-black/25 text-white"><div className="text-center">{video.status === "failed" ? <IconAlertTriangle className="mx-auto size-7 text-red-300" /> : <IconLoader2 className="mx-auto size-7 animate-spin" />}<p className="mt-3 text-xs font-semibold uppercase tracking-wider">{video.status}</p></div></div>
-                  ) : null}
-                </div>
-                <div className="p-4"><div className="flex items-center justify-between gap-3"><h2 className="truncate text-sm font-semibold">{video.characterName}</h2><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Kling O3</span></div>{video.error ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-red-600">{video.error}</p> : null}</div>
-              </article>
-            ))}
+      <StudioHeader
+        eyebrow="Your output"
+        title="Library"
+        description="Every photo and video created with your characters, ready to revisit or download."
+        action={
+          <Link
+            href="/create"
+            className={cn(
+              buttonVariants({ size: "sm" }),
+              "hidden sm:inline-flex"
+            )}
+          >
+            Create new <IconArrowRight className="size-4" />
+          </Link>
+        }
+      />
+
+      <div className="mx-auto max-w-[1500px] px-5 pb-10 md:px-8 lg:px-10">
+        <section className="border-y py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div
+              className="inline-flex w-fit items-center gap-1 rounded-full bg-muted p-1"
+              role="group"
+              aria-label="Filter by media type"
+            >
+              {(
+                [
+                  ["all", "All", photos.length + videos.length],
+                  ["photos", "Photos", photos.length],
+                  ["videos", "Videos", videos.length],
+                ] as const
+              ).map(([value, label, count]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={mediaFilter === value}
+                  onClick={() => setMediaFilter(value)}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-2 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors",
+                    mediaFilter === value &&
+                      "bg-background text-foreground shadow-sm"
+                  )}
+                >
+                  {label}
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    {count}
+                    {value !== "photos" && videosHaveMore ? "+" : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 lg:justify-end">
+              <button
+                type="button"
+                aria-pressed={characterFilter === "all"}
+                onClick={() => setCharacterFilter("all")}
+                className={cn(
+                  "shrink-0 rounded-full border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
+                  characterFilter === "all" &&
+                    "border-primary bg-primary/10 text-foreground"
+                )}
+              >
+                All characters
+              </button>
+              {characters?.map((character) => (
+                <button
+                  key={character._id}
+                  type="button"
+                  aria-pressed={characterFilter === character._id}
+                  onClick={() => setCharacterFilter(character._id)}
+                  className={cn(
+                    "flex shrink-0 items-center gap-2 rounded-full border bg-background py-1.5 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
+                    characterFilter === character._id &&
+                      "border-primary bg-primary/10 text-foreground"
+                  )}
+                >
+                  <span className="size-6 overflow-hidden rounded-full bg-muted">
+                    {character.primaryImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={character.primaryImageUrl}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    ) : null}
+                  </span>
+                  {character.name}
+                </button>
+              ))}
+            </div>
           </div>
+        </section>
+
+        {initialLoading ? (
+          <div className="grid min-h-[420px] place-items-center text-muted-foreground">
+            <IconLoader2 className="size-6 animate-spin" />
+          </div>
+        ) : items.length === 0 ? (
+          <section className="grid min-h-[420px] place-items-center py-10 text-center">
+            <div className="max-w-sm">
+              <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+                {mediaFilter === "videos" ? (
+                  <IconMovie className="size-6" />
+                ) : (
+                  <IconPhoto className="size-6" />
+                )}
+              </span>
+              <h2 className="mt-4 text-lg font-semibold">{emptyLabel}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Create a picture or clone a short performance and it will appear here automatically.
+              </p>
+              <Link
+                href="/create"
+                className={cn(buttonVariants(), "mt-5")}
+              >
+                Go to Studio <IconArrowRight className="size-4" />
+              </Link>
+            </div>
+          </section>
+        ) : (
+          <>
+            <section
+              className="grid grid-cols-2 gap-3 py-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+              aria-label={`${mediaFilter === "all" ? "All media" : mediaFilter}`}
+            >
+              {items.map((item) =>
+                item.kind === "photo" ? (
+                  <article
+                    key={`photo-${item.characterId}-${item.key}`}
+                    className="group min-w-0 overflow-hidden rounded-2xl border bg-card"
+                  >
+                    <div className="relative aspect-[4/5] overflow-hidden bg-muted">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPhoto(item)}
+                        className="size-full cursor-zoom-in text-left"
+                        aria-label={`Preview ${item.characterName} photo`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={item.url}
+                          alt={`${item.characterName} generated photo`}
+                          className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]"
+                        />
+                      </button>
+                      <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+                        <IconPhoto className="size-3" /> Photo
+                      </span>
+                      <a
+                        href={item.url}
+                        download
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Download ${item.characterName} photo`}
+                        className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-black/65 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/80 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <IconDownload className="size-4" />
+                      </a>
+                    </div>
+                    <div className="p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="size-6 shrink-0 overflow-hidden rounded-full bg-muted">
+                          {item.characterImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.characterImageUrl}
+                              alt=""
+                              className="size-full object-cover"
+                            />
+                          ) : null}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold">
+                            {item.characterName}
+                          </p>
+                          <p className="truncate text-[10px] text-muted-foreground">
+                            {modelLabel(item.model)}
+                            {item.aspectRatio ? ` · ${item.aspectRatio}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ) : (
+                  <article
+                    key={`video-${item._id}`}
+                    className="group min-w-0 overflow-hidden rounded-2xl border bg-card"
+                  >
+                    <div className="relative aspect-[4/5] overflow-hidden bg-[#171914]">
+                      {item.outputVideoUrl ? (
+                        <video
+                          src={item.outputVideoUrl}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          aria-label={`${item.characterName} generated video`}
+                          className="size-full object-cover"
+                        />
+                      ) : item.characterImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.characterImageUrl}
+                          alt=""
+                          className="size-full object-cover opacity-45"
+                        />
+                      ) : null}
+                      {!item.outputVideoUrl ? (
+                        <div className="absolute inset-0 grid place-items-center bg-black/30 text-white">
+                          <div className="px-4 text-center">
+                            {item.status === "failed" ? (
+                              <IconAlertTriangle className="mx-auto size-7 text-red-300" />
+                            ) : (
+                              <IconLoader2 className="mx-auto size-7 animate-spin" />
+                            )}
+                            <p className="mt-3 text-xs font-semibold capitalize">
+                              {item.status}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+                      <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium capitalize text-white backdrop-blur-sm">
+                        {item.status === "completed" ? (
+                          <IconCheck className="size-3 text-lime-300" />
+                        ) : item.status === "failed" ? (
+                          <IconAlertTriangle className="size-3 text-red-300" />
+                        ) : (
+                          <IconPlayerPlayFilled className="size-3" />
+                        )}
+                        {item.status}
+                      </span>
+                      {item.outputVideoUrl ? (
+                        <a
+                          href={item.outputVideoUrl}
+                          download
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Download ${item.characterName} video`}
+                          className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-black/65 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/80 focus:opacity-100 group-hover:opacity-100"
+                        >
+                          <IconDownload className="size-4" />
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="p-3">
+                      <p className="truncate text-xs font-semibold">
+                        {item.characterName}
+                      </p>
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                        Kling O3 Pro · {formatDate(item.createdAt)}
+                      </p>
+                      {item.error ? (
+                        <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-destructive">
+                          {item.error}
+                        </p>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              )}
+            </section>
+
+            {mediaFilter !== "photos" && videosHaveMore ? (
+              <div className="flex justify-center pb-8">
+                <Button
+                  variant="outline"
+                  onClick={() => loadMore(24)}
+                  disabled={status === "LoadingMore"}
+                >
+                  {status === "LoadingMore" ? (
+                    <IconLoader2 className="size-4 animate-spin" />
+                  ) : null}
+                  {status === "LoadingMore" ? "Loading…" : "Load more"}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
+
+      <Dialog.Root
+        open={selectedPhoto !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPhoto(null)
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" />
+          <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 md:p-8">
+            <Dialog.Popup className="relative grid max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-hidden rounded-3xl border bg-background shadow-2xl outline-none md:grid-cols-[minmax(0,1fr)_320px]">
+              <Dialog.Close
+                aria-label="Close photo preview"
+                className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <IconX className="size-4" />
+              </Dialog.Close>
+              <div className="grid min-h-0 place-items-center bg-black/95">
+                {selectedPhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={selectedPhoto.url}
+                    alt={`${selectedPhoto.characterName} generated photo`}
+                    className="max-h-[65dvh] w-full object-contain md:max-h-[calc(100dvh-4rem)]"
+                  />
+                ) : null}
+              </div>
+              <div className="overflow-y-auto p-5 md:p-6">
+                <Dialog.Title className="text-lg font-semibold">
+                  {selectedPhoto?.characterName} photo
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-xs text-muted-foreground">
+                  {selectedPhoto ? formatDate(selectedPhoto.createdAt) : ""}
+                </Dialog.Description>
+                {selectedPhoto?.prompt ? (
+                  <div className="mt-6">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Creative direction
+                    </p>
+                    <p className="mt-2 text-sm leading-6">
+                      {selectedPhoto.prompt}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="mt-6 grid grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <p className="text-muted-foreground">Model</p>
+                    <p className="mt-1 font-medium">
+                      {modelLabel(selectedPhoto?.model ?? null)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-muted/50 p-3">
+                    <p className="text-muted-foreground">Format</p>
+                    <p className="mt-1 font-medium">
+                      {selectedPhoto?.aspectRatio ?? "Original"}
+                    </p>
+                  </div>
+                </div>
+                {selectedPhoto ? (
+                  <a
+                    href={selectedPhoto.url}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(buttonVariants(), "mt-6 w-full")}
+                  >
+                    <IconDownload className="size-4" /> Download photo
+                  </a>
+                ) : null}
+              </div>
+            </Dialog.Popup>
+          </Dialog.Viewport>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   )
 }

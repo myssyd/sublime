@@ -6,11 +6,24 @@ import { authComponent } from "./auth"
 import { r2 } from "./assets"
 import { internal } from "./_generated/api"
 import { action, type ActionCtx } from "./_generated/server"
+import {
+  CHARACTER_IMAGE_CREDITS,
+  imageCreditsForModel,
+} from "./billing"
 
 const SEEDREAM_TEXT_MODEL = "bytedance/seedream/v5/pro/text-to-image"
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit"
 const NANO_BANANA_TEXT_MODEL = "fal-ai/nano-banana"
 const NANO_BANANA_EDIT_MODEL = "fal-ai/nano-banana/edit"
+const MAX_PICTURE_ATTACHMENTS = 4
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+])
+const PICTURE_REFERENCE_PATH =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/references\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type ImageModel = "seedream-5" | "nano-banana"
 type ImageAspectRatio =
@@ -61,6 +74,11 @@ function configureFal() {
   fal.config({ credentials: apiKey })
 }
 
+function isOwnedPictureReferenceKey(userId: string, key: string) {
+  const prefix = `users/${userId}/pictures/`
+  return key.startsWith(prefix) && PICTURE_REFERENCE_PATH.test(key.slice(prefix.length))
+}
+
 async function generateImage(args: {
   prompt: string
   referenceUrls?: string[]
@@ -98,14 +116,73 @@ async function generateImage(args: {
   const result = (await fal.subscribe(model, { input, logs: true })) as SeedreamResult
   const outputUrl = result.data?.images?.[0]?.url
   if (!outputUrl) throw new Error("The image model returned no image")
-  const response = await fetch(outputUrl)
-  if (!response.ok) {
-    throw new Error(`Could not download the generated image (${response.status})`)
-  }
   return {
-    blob: await response.blob(),
+    outputUrl,
     model,
     requestId: result.requestId,
+  }
+}
+
+async function generateBilledImage(
+  ctx: ActionCtx,
+  args: {
+    userId: string
+    reservationKey: string
+    credits: number
+    kind: string
+    refId: string
+    prompt: string
+    referenceUrls?: string[]
+    model?: ImageModel
+    aspectRatio?: ImageAspectRatio
+    alreadyReserved?: boolean
+  }
+) {
+  if (!args.alreadyReserved) {
+    await ctx.runMutation(internal.credits.createReservation, {
+      userId: args.userId,
+      credits: args.credits,
+      reservationKey: args.reservationKey,
+      kind: args.kind,
+      refId: args.refId,
+    })
+  }
+  const startedAt = Date.now()
+  const fallbackModel =
+    args.model === "nano-banana"
+      ? NANO_BANANA_EDIT_MODEL
+      : args.referenceUrls?.length
+        ? SEEDREAM_EDIT_MODEL
+        : SEEDREAM_TEXT_MODEL
+  try {
+    const generated = await generateImage(args)
+    await ctx.runMutation(internal.credits.recordProviderSuccess, {
+      reservationKey: args.reservationKey,
+      operation: "character_image",
+      model: generated.model,
+      providerRequestId: generated.requestId,
+      elapsedMs: Date.now() - startedAt,
+    })
+    const response = await fetch(generated.outputUrl)
+    if (!response.ok) {
+      throw new Error(
+        `Could not download the generated image (${response.status})`
+      )
+    }
+    return {
+      blob: await response.blob(),
+      model: generated.model,
+      requestId: generated.requestId,
+    }
+  } catch (error) {
+    await ctx.runMutation(internal.credits.recordProviderFailure, {
+      reservationKey: args.reservationKey,
+      operation: "character_image",
+      model: fallbackModel,
+      elapsedMs: Date.now() - startedAt,
+      reason: errorMessage(error),
+    })
+    throw error
   }
 }
 
@@ -173,18 +250,18 @@ export const generateHero = action({
       userId: user._id,
       stage: "hero",
     })
-    const startedAt = Date.now()
-    let model =
-      character.sourceKind === "image"
-        ? SEEDREAM_EDIT_MODEL
-        : SEEDREAM_TEXT_MODEL
     try {
       const referenceUrls = await Promise.all(
         (character.sourceImageKeys ?? []).map((key) =>
           r2.getUrl(key, { expiresIn: 60 * 60 })
         )
       )
-      const generated = await generateImage({
+      const generated = await generateBilledImage(ctx, {
+        userId: user._id,
+        reservationKey: `character-hero:${args.characterId}:${crypto.randomUUID()}`,
+        credits: CHARACTER_IMAGE_CREDITS,
+        kind: "character_hero",
+        refId: args.characterId,
         prompt: heroPrompt({
           sourceKind: character.sourceKind,
           sourcePrompt: character.sourcePrompt,
@@ -192,7 +269,6 @@ export const generateHero = action({
         }),
         referenceUrls,
       })
-      model = generated.model
       const imageKey = await storeGeneratedImage(
         ctx,
         generated.blob,
@@ -203,25 +279,12 @@ export const generateHero = action({
         userId: user._id,
         imageKey,
       })
-      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
-        userId: user._id,
-        model,
-        status: "completed",
-        providerRequestId: generated.requestId,
-        elapsedMs: Date.now() - startedAt,
-      })
       return { imageKey }
     } catch (error) {
       await ctx.runMutation(internal.characters.internalFailGeneration, {
         id: args.characterId,
         userId: user._id,
         error: errorMessage(error),
-      })
-      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
-        userId: user._id,
-        model,
-        status: "failed",
-        elapsedMs: Date.now() - startedAt,
       })
       throw error
     }
@@ -246,15 +309,49 @@ export const generateReferencePack = action({
       userId: user._id,
       stage: "references",
     })
-    const startedAt = Date.now()
     try {
       const heroUrl = await r2.getUrl(character.primaryImageKey, {
         expiresIn: 60 * 60,
       })
-      const generated = await Promise.all([
-        generateImage({ prompt: THREE_QUARTER_PROMPT, referenceUrls: [heroUrl] }),
-        generateImage({ prompt: FULL_BODY_PROMPT, referenceUrls: [heroUrl] }),
+      const reservationKeys = [
+        `character-reference:${args.characterId}:three-quarter:${crypto.randomUUID()}`,
+        `character-reference:${args.characterId}:full-body:${crypto.randomUUID()}`,
+      ]
+      await ctx.runMutation(internal.credits.createReservationBundle, {
+        userId: user._id,
+        reservations: reservationKeys.map((reservationKey, index) => ({
+          reservationKey,
+          credits: CHARACTER_IMAGE_CREDITS,
+          kind: "character_reference",
+          refId: `${args.characterId}:${index}`,
+        })),
+      })
+      const generationResults = await Promise.allSettled([
+        generateBilledImage(ctx, {
+          userId: user._id,
+          reservationKey: reservationKeys[0],
+          credits: CHARACTER_IMAGE_CREDITS,
+          kind: "character_reference",
+          refId: `${args.characterId}:three-quarter`,
+          prompt: THREE_QUARTER_PROMPT,
+          referenceUrls: [heroUrl],
+          alreadyReserved: true,
+        }),
+        generateBilledImage(ctx, {
+          userId: user._id,
+          reservationKey: reservationKeys[1],
+          credits: CHARACTER_IMAGE_CREDITS,
+          kind: "character_reference",
+          refId: `${args.characterId}:full-body`,
+          prompt: FULL_BODY_PROMPT,
+          referenceUrls: [heroUrl],
+          alreadyReserved: true,
+        }),
       ])
+      const generated = generationResults.map((result) => {
+        if (result.status === "rejected") throw result.reason
+        return result.value
+      })
       const labels = ["three-quarter", "full-body"]
       const referenceImageKeys = await Promise.all(
         generated.map((image, index) =>
@@ -270,29 +367,12 @@ export const generateReferencePack = action({
         userId: user._id,
         referenceImageKeys,
       })
-      await Promise.all(
-        generated.map((image) =>
-          ctx.runMutation(internal.characters.internalRecordImageUsage, {
-            userId: user._id,
-            model: image.model,
-            status: "completed",
-            providerRequestId: image.requestId,
-            elapsedMs: Date.now() - startedAt,
-          })
-        )
-      )
       return { referenceImageKeys }
     } catch (error) {
       await ctx.runMutation(internal.characters.internalFailGeneration, {
         id: args.characterId,
         userId: user._id,
         error: errorMessage(error),
-      })
-      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
-        userId: user._id,
-        model: SEEDREAM_EDIT_MODEL,
-        status: "failed",
-        elapsedMs: Date.now() - startedAt,
       })
       throw error
     }
@@ -304,6 +384,7 @@ export const generateCreation = action({
     characterId: v.id("characters"),
     prompt: v.string(),
     model: v.union(v.literal("seedream-5"), v.literal("nano-banana")),
+    attachmentImageKeys: v.array(v.string()),
     aspectRatio: v.union(
       v.literal("21:9"),
       v.literal("16:9"),
@@ -323,36 +404,72 @@ export const generateCreation = action({
     const prompt = args.prompt.trim()
     if (prompt.length < 3) throw new Error("Describe the picture you want")
     if (prompt.length > 2_000) throw new Error("Picture direction is too long")
-
-    const character = await ctx.runQuery(internal.characters.internalGetOwned, {
-      id: args.characterId,
-      userId: user._id,
-    })
-    if (
-      !character ||
-      character.status !== "ready" ||
-      !character.primaryImageKey
-    ) {
-      throw new Error("Character not found")
+    if (args.attachmentImageKeys.length > MAX_PICTURE_ATTACHMENTS) {
+      throw new Error(`Use up to ${MAX_PICTURE_ATTACHMENTS} reference images`)
     }
-
-    configureFal()
-    const startedAt = Date.now()
+    if (new Set(args.attachmentImageKeys).size !== args.attachmentImageKeys.length) {
+      throw new Error("Attached reference images must be unique")
+    }
+    if (
+      args.attachmentImageKeys.some(
+        (key) => !isOwnedPictureReferenceKey(user._id, key)
+      )
+    ) {
+      throw new Error("Attached reference image does not belong to this account")
+    }
     try {
+      const attachmentObjects = await Promise.all(
+        args.attachmentImageKeys.map((key) => r2.getMetadata(ctx, key))
+      )
+      if (
+        attachmentObjects.some(
+          (object) =>
+            !object ||
+            object.size === undefined ||
+            object.size <= 0 ||
+            object.size > MAX_IMAGE_BYTES ||
+            !object.contentType ||
+            !ALLOWED_IMAGE_TYPES.has(object.contentType.toLowerCase())
+        )
+      ) {
+        throw new Error("Attached references must be JPG, PNG, or WebP under 15 MB")
+      }
+
+      const character = await ctx.runQuery(internal.characters.internalGetOwned, {
+        id: args.characterId,
+        userId: user._id,
+      })
+      if (
+        !character ||
+        character.status !== "ready" ||
+        !character.primaryImageKey
+      ) {
+        throw new Error("Character not found")
+      }
+
+      configureFal()
       const referenceKeys = [
         character.primaryImageKey,
         ...character.referenceImageKeys,
+        ...args.attachmentImageKeys,
       ]
       const referenceUrls = await Promise.all(
         referenceKeys.map((key) => r2.getUrl(key, { expiresIn: 60 * 60 }))
       )
-      const generated = await generateImage({
+      const generated = await generateBilledImage(ctx, {
+        userId: user._id,
+        reservationKey: `creation-image:${args.characterId}:${crypto.randomUUID()}`,
+        credits: imageCreditsForModel(args.model),
+        kind: "creation_image",
+        refId: args.characterId,
         referenceUrls,
         model: args.model,
         aspectRatio: args.aspectRatio,
         prompt: `Create a new photorealistic ${args.aspectRatio} social photo of the EXACT SAME PERSON shown in the supplied identity references. Preserve their recognizable facial identity, facial proportions, skin tone, hair, age, build, and distinctive features exactly.
 
 Creative direction: ${prompt}
+
+Any additional supplied images after the identity references are creative references for outfit, styling, props, pose, setting, or composition. Preserve the selected character's identity; do not adopt another person's face or body identity from those creative references.
 
 Make the result feel like a polished, believable Instagram post with natural photographic detail and intentional composition. One person only unless the creative direction explicitly asks otherwise. No text, lettering, watermark, border, duplicate face, distorted anatomy, or identity drift.`,
       })
@@ -365,26 +482,15 @@ Make the result feel like a polished, believable Instagram post with natural pho
         id: args.characterId,
         userId: user._id,
         imageKey,
-      })
-      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
-        userId: user._id,
-        model: generated.model,
-        status: "completed",
-        providerRequestId: generated.requestId,
-        elapsedMs: Date.now() - startedAt,
+        prompt,
+        model: args.model,
+        aspectRatio: args.aspectRatio,
       })
       return { imageKey }
-    } catch (error) {
-      await ctx.runMutation(internal.characters.internalRecordImageUsage, {
-        userId: user._id,
-        model:
-          args.model === "nano-banana"
-            ? NANO_BANANA_EDIT_MODEL
-            : SEEDREAM_EDIT_MODEL,
-        status: "failed",
-        elapsedMs: Date.now() - startedAt,
-      })
-      throw error
+    } finally {
+      await Promise.allSettled(
+        args.attachmentImageKeys.map((key) => r2.deleteObject(ctx, key))
+      )
     }
   },
 })

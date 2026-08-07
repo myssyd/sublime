@@ -5,6 +5,7 @@ import { useAction, useMutation, useQuery } from "convex/react"
 import {
   IconArrowLeft,
   IconArrowRight,
+  IconBolt,
   IconCheck,
   IconLoader2,
   IconPhotoUp,
@@ -529,6 +530,12 @@ export default function CharactersPage() {
                             <IconSparkles className="size-4" />
                           )}
                           {working ? "Generating hero…" : "Generate hero"}
+                          {!working ? (
+                            <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                              <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                              10
+                            </span>
+                          ) : null}
                         </Button>
                       </div>
                     </aside>
@@ -666,6 +673,12 @@ export default function CharactersPage() {
                         <IconRefresh className="size-4" />
                       )}
                       {heroCandidates.length ? "Try another" : "Generate hero"}
+                      {!(working || draft.generationStage === "hero") ? (
+                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                          10
+                        </span>
+                      ) : null}
                     </Button>
                     <Button
                       size="lg"
@@ -675,6 +688,12 @@ export default function CharactersPage() {
                     >
                       {working ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
                       {working ? "Building references…" : "Approve & build references"}
+                      {!working ? (
+                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                          20
+                        </span>
+                      ) : null}
                     </Button>
                     <button
                       type="button"

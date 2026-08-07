@@ -33,6 +33,51 @@ function assetUrls(keys: string[]) {
     .filter((url): url is string => Boolean(url))
 }
 
+function creationImages(character: {
+  creationImages?: Array<{
+    key: string
+    prompt: string
+    model: "seedream-5" | "nano-banana"
+    aspectRatio:
+      | "21:9"
+      | "16:9"
+      | "3:2"
+      | "4:3"
+      | "5:4"
+      | "1:1"
+      | "4:5"
+      | "3:4"
+      | "2:3"
+      | "9:16"
+    createdAt: number
+  }>
+  creationImageKeys?: string[]
+  updatedAt: number
+}) {
+  const current = (character.creationImages ?? []).flatMap((image) => {
+    const url = publicAssetUrl(image.key)
+    return url ? [{ ...image, url }] : []
+  })
+  const currentKeys = new Set(current.map((image) => image.key))
+  const legacy = (character.creationImageKeys ?? []).flatMap((key, index) => {
+    if (currentKeys.has(key)) return []
+    const url = publicAssetUrl(key)
+    return url
+      ? [
+          {
+            key,
+            url,
+            prompt: "",
+            model: null,
+            aspectRatio: null,
+            createdAt: character.updatedAt + index,
+          },
+        ]
+      : []
+  })
+  return [...current, ...legacy]
+}
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -51,7 +96,7 @@ export const list = query({
           ...character,
           primaryImageUrl: publicAssetUrl(character.primaryImageKey),
           referenceImageUrls: assetUrls(character.referenceImageKeys),
-          creationImageUrls: assetUrls(character.creationImageKeys ?? []),
+          creationImages: creationImages(character),
         },
       ]
     })
@@ -290,6 +335,20 @@ export const internalAppendCreationImage = internalMutation({
     id: v.id("characters"),
     userId: v.string(),
     imageKey: v.string(),
+    prompt: v.string(),
+    model: v.union(v.literal("seedream-5"), v.literal("nano-banana")),
+    aspectRatio: v.union(
+      v.literal("21:9"),
+      v.literal("16:9"),
+      v.literal("3:2"),
+      v.literal("4:3"),
+      v.literal("5:4"),
+      v.literal("1:1"),
+      v.literal("4:5"),
+      v.literal("3:4"),
+      v.literal("2:3"),
+      v.literal("9:16")
+    ),
   },
   handler: async (ctx, args) => {
     const character = await ctx.db.get(args.id)
@@ -301,7 +360,16 @@ export const internalAppendCreationImage = internalMutation({
       throw new Error("Character not found")
     }
     await ctx.db.patch(args.id, {
-      creationImageKeys: [...(character.creationImageKeys ?? []), args.imageKey],
+      creationImages: [
+        ...(character.creationImages ?? []),
+        {
+          key: args.imageKey,
+          prompt: args.prompt,
+          model: args.model,
+          aspectRatio: args.aspectRatio,
+          createdAt: Date.now(),
+        },
+      ],
       updatedAt: Date.now(),
     })
   },
@@ -320,28 +388,6 @@ export const internalFailGeneration = internalMutation({
       generationStage: undefined,
       generationError: args.error.slice(0, 1000),
       updatedAt: Date.now(),
-    })
-  },
-})
-
-export const internalRecordImageUsage = internalMutation({
-  args: {
-    userId: v.string(),
-    model: v.string(),
-    status: v.union(v.literal("completed"), v.literal("failed")),
-    providerRequestId: v.optional(v.string()),
-    elapsedMs: v.number(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.insert("usage", {
-      userId: args.userId,
-      operation: "character_image",
-      provider: "fal",
-      model: args.model,
-      status: args.status,
-      providerRequestId: args.providerRequestId,
-      elapsedMs: args.elapsedMs,
-      createdAt: Date.now(),
     })
   },
 })
