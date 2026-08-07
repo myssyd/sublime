@@ -7,11 +7,14 @@ import {
   IconBolt,
   IconHomeSpark,
   IconLibraryPhoto,
+  IconShieldLock,
   IconUsers,
 } from "@tabler/icons-react"
+import { useQuery } from "convex/react"
 import { AccountMenu } from "@/components/account-menu"
 import { BrandMark } from "@/components/brand-mark"
 import { CreditBalance } from "@/components/credit-balance"
+import { api } from "@/convex/_generated/api"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -24,6 +27,10 @@ const navItems = [
 
 export function StudioSidebar() {
   const pathname = usePathname()
+  const isAdmin = useQuery(api.admin.isAdmin)
+  const visibleNavItems = isAdmin
+    ? [...navItems, { href: "/admin", label: "Admin", icon: IconShieldLock }]
+    : navItems
 
   return (
     <>
@@ -32,7 +39,7 @@ export function StudioSidebar() {
           <BrandMark />
         </Link>
         <nav className="mt-8 flex w-full flex-1 flex-col items-center gap-1 px-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
             const Icon = item.icon
             return (
@@ -59,12 +66,17 @@ export function StudioSidebar() {
             )
           })}
         </nav>
-        <CreditBalance className="mb-2 max-w-[64px] px-2" />
+        <CreditBalance className="mb-0.5 max-w-[64px] px-2" />
         <AccountMenu placement="sidebar" />
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t bg-background/95 px-2 backdrop-blur md:hidden">
-        {navItems.map((item) => {
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 grid h-16 border-t bg-background/95 px-2 backdrop-blur md:hidden"
+        style={{
+          gridTemplateColumns: `repeat(${visibleNavItems.length}, minmax(0, 1fr))`,
+        }}
+      >
+        {visibleNavItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
           const Icon = item.icon
           return (

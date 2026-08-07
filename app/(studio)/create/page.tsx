@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { useAction, useQuery } from "convex/react"
 import {
   IconArrowRight,
@@ -297,6 +298,7 @@ function VideoReferencePair({
 }
 
 export default function CreatePage() {
+  const searchParams = useSearchParams()
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
   const createVideo = useAction(api.videoSubmission.createAndQueue)
@@ -330,7 +332,12 @@ export default function CreatePage() {
   const [keepAudio, setKeepAudio] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
-  const activeCharacterId = characterId ?? characters?.[0]?._id ?? null
+  const requestedCharacterId = searchParams.get("character")
+  const requestedCharacter = characters?.find(
+    (character) => character._id === requestedCharacterId
+  )
+  const activeCharacterId =
+    characterId ?? requestedCharacter?._id ?? characters?.[0]?._id ?? null
   const selectedCharacter = useMemo(
     () => characters?.find((character) => character._id === activeCharacterId),
     [activeCharacterId, characters]
@@ -376,6 +383,7 @@ export default function CreatePage() {
     videoImageOptions.find((image) => image.key === videoCharacterImageKey) ??
     videoImageOptions[0] ??
     null
+
   const canonicalReelUrl = canonicalInstagramReelUrl(reelUrl)
   const reelUrlValid = canonicalReelUrl !== null
   const hasReference =

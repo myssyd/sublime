@@ -43,6 +43,33 @@ export const list = query({
   },
 })
 
+export const listForCharacter = query({
+  args: { characterId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) return []
+    const characterId = ctx.db.normalizeId("characters", args.characterId)
+    if (!characterId) return []
+    const character = await ctx.db.get(characterId)
+    if (!character || character.userId !== user._id) return []
+    const videos = await ctx.db
+      .query("videos")
+      .withIndex("by_user_character", (q) =>
+        q.eq("userId", user._id).eq("characterId", characterId)
+      )
+      .order("desc")
+      .take(12)
+
+    return videos.map((video) => ({
+      ...video,
+      sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
+      outputVideoUrl: video.outputVideoKey
+        ? publicAssetUrl(video.outputVideoKey)
+        : null,
+    }))
+  },
+})
+
 export const listPage = query({
   args: {
     characterId: v.optional(v.id("characters")),

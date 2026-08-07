@@ -142,8 +142,10 @@ export default defineSchema({
     currentPeriodEnd: v.optional(v.number()),
     subscriptionBalance: v.number(),
     topupBalance: v.number(),
+    adminBalance: v.optional(v.number()),
     reservedSubscriptionCredits: v.optional(v.number()),
     reservedTopupCredits: v.optional(v.number()),
+    reservedAdminCredits: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_stripe_customer", ["stripeCustomerId"])
@@ -170,6 +172,7 @@ export default defineSchema({
     credits: v.number(),
     subscriptionCredits: v.number(),
     topupCredits: v.number(),
+    adminCredits: v.optional(v.number()),
     status: v.union(
       v.literal("active"),
       v.literal("settled"),

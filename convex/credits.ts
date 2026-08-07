@@ -9,35 +9,41 @@ import {
 import { authComponent } from "./auth"
 import { CREDIT_RATE_VERSION, TOPUP_AMOUNT } from "./billing"
 
-type LedgerSource = "subscription" | "topup"
+type LedgerSource = "subscription" | "topup" | "admin"
 type LedgerReason =
   | "subscription_grant"
   | "upgrade_delta"
   | "topup"
+  | "admin_grant"
   | "spend"
   | "refund"
   | "expiry"
 
 type UsageOperation = "character_image" | "video_clone"
 
-function availableBalances(sub: {
+export function availableBalances(sub: {
   subscriptionBalance: number
   topupBalance: number
+  adminBalance?: number
   reservedSubscriptionCredits?: number
   reservedTopupCredits?: number
+  reservedAdminCredits?: number
 }) {
   const reservedSubscription = sub.reservedSubscriptionCredits ?? 0
   const reservedTopup = sub.reservedTopupCredits ?? 0
+  const reservedAdmin = sub.reservedAdminCredits ?? 0
   const subscriptionBalance = Math.max(
     0,
     sub.subscriptionBalance - reservedSubscription
   )
   const topupBalance = Math.max(0, sub.topupBalance - reservedTopup)
+  const adminBalance = Math.max(0, (sub.adminBalance ?? 0) - reservedAdmin)
   return {
     subscriptionBalance,
     topupBalance,
-    reservedCredits: reservedSubscription + reservedTopup,
-    total: subscriptionBalance + topupBalance,
+    adminBalance,
+    reservedCredits: reservedSubscription + reservedTopup + reservedAdmin,
+    total: subscriptionBalance + topupBalance + adminBalance,
   }
 }
 
@@ -58,8 +64,10 @@ async function getOrCreateSubscription(
     monthlyAllowance: 0,
     subscriptionBalance: 0,
     topupBalance: 0,
+    adminBalance: 0,
     reservedSubscriptionCredits: 0,
     reservedTopupCredits: 0,
+    reservedAdminCredits: 0,
   })
   const created = await ctx.db.get(id)
   if (!created) throw new Error("Could not create billing account")
@@ -97,11 +105,41 @@ async function applyDelta(
     await ctx.db.patch(sub._id, {
       subscriptionBalance: sub.subscriptionBalance + args.delta,
     })
-  } else {
+  } else if (args.source === "topup") {
     await ctx.db.patch(sub._id, {
       topupBalance: sub.topupBalance + args.delta,
     })
+  } else {
+    await ctx.db.patch(sub._id, {
+      adminBalance: (sub.adminBalance ?? 0) + args.delta,
+    })
   }
+}
+
+export async function grantAdminCredits(
+  ctx: MutationCtx,
+  args: {
+    userId: string
+    credits: number
+    grantId: string
+    adminEmail: string
+    notes?: string
+  }
+) {
+  await applyDelta(ctx, {
+    userId: args.userId,
+    delta: args.credits,
+    reason: "admin_grant",
+    source: "admin",
+    idempotencyKey: `admin_grant_${args.grantId}`,
+    notes: [
+      `Granted by ${args.adminEmail}`,
+      args.notes?.trim() || undefined,
+    ]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 500),
+  })
 }
 
 export async function reserveCredits(
@@ -141,20 +179,21 @@ export async function reserveCredits(
   }
 
   const sub = await getOrCreateSubscription(ctx, args.userId)
-  if (sub.status === "past_due") {
-    throw new ConvexError({
-      kind: "subscription_past_due",
-      message: "Update your payment method to keep generating.",
-    })
-  }
-  if (sub.status !== "active") {
+  const available = availableBalances(sub)
+  const hasPaidAccess = sub.status === "active"
+  if (!hasPaidAccess && available.adminBalance < args.credits) {
+    if (sub.status === "past_due") {
+      throw new ConvexError({
+        kind: "subscription_past_due",
+        message: "Update your payment method to keep generating.",
+      })
+    }
     throw new ConvexError({
       kind: "subscription_required",
-      message: "Choose a plan to start generating.",
+      message: "Choose a plan or ask an admin for credits to start generating.",
     })
   }
 
-  const available = availableBalances(sub)
   if (available.total < args.credits) {
     throw new ConvexError({
       kind: "insufficient_credits",
@@ -164,11 +203,15 @@ export async function reserveCredits(
     })
   }
 
-  const subscriptionCredits = Math.min(
-    available.subscriptionBalance,
-    args.credits
+  const subscriptionCredits = hasPaidAccess
+    ? Math.min(available.subscriptionBalance, args.credits)
+    : 0
+  const remainingAfterSubscription = args.credits - subscriptionCredits
+  const adminCredits = Math.min(
+    available.adminBalance,
+    remainingAfterSubscription
   )
-  const topupCredits = args.credits - subscriptionCredits
+  const topupCredits = remainingAfterSubscription - adminCredits
   const now = Date.now()
   const reservationId = existing
     ? existing._id
@@ -178,6 +221,7 @@ export async function reserveCredits(
         credits: args.credits,
         subscriptionCredits,
         topupCredits,
+        adminCredits,
         status: "active",
         kind: args.kind,
         refId: args.refId,
@@ -191,6 +235,7 @@ export async function reserveCredits(
     await ctx.db.patch(existing._id, {
       subscriptionCredits,
       topupCredits,
+      adminCredits,
       status: "active",
       releasedAt: undefined,
       releaseReason: undefined,
@@ -203,6 +248,8 @@ export async function reserveCredits(
       (sub.reservedSubscriptionCredits ?? 0) + subscriptionCredits,
     reservedTopupCredits:
       (sub.reservedTopupCredits ?? 0) + topupCredits,
+    reservedAdminCredits:
+      (sub.reservedAdminCredits ?? 0) + adminCredits,
   })
   return reservationId
 }
@@ -228,6 +275,10 @@ async function releaseReservation(
     reservedTopupCredits: Math.max(
       0,
       (sub.reservedTopupCredits ?? 0) - reservation.topupCredits
+    ),
+    reservedAdminCredits: Math.max(
+      0,
+      (sub.reservedAdminCredits ?? 0) - (reservation.adminCredits ?? 0)
     ),
   })
   await ctx.db.patch(reservation._id, {
@@ -276,6 +327,17 @@ async function settleReservation(
       notes: reservation.kind,
     })
   }
+  if ((reservation.adminCredits ?? 0) > 0) {
+    await applyDelta(ctx, {
+      userId: reservation.userId,
+      delta: -(reservation.adminCredits ?? 0),
+      reason: "spend",
+      source: "admin",
+      idempotencyKey: `spend_${usageId}__admin`,
+      usageId,
+      notes: reservation.kind,
+    })
+  }
 
   const sub = await getOrCreateSubscription(ctx, reservation.userId)
   await ctx.db.patch(sub._id, {
@@ -287,6 +349,10 @@ async function settleReservation(
     reservedTopupCredits: Math.max(
       0,
       (sub.reservedTopupCredits ?? 0) - reservation.topupCredits
+    ),
+    reservedAdminCredits: Math.max(
+      0,
+      (sub.reservedAdminCredits ?? 0) - (reservation.adminCredits ?? 0)
     ),
   })
   await ctx.db.patch(reservation._id, {
@@ -300,6 +366,7 @@ async function settleReservation(
 const balanceValidator = v.object({
   subscriptionBalance: v.number(),
   topupBalance: v.number(),
+  adminBalance: v.number(),
   reservedCredits: v.number(),
   total: v.number(),
 })
@@ -319,6 +386,7 @@ export const getMyBalance = query({
       : {
           subscriptionBalance: 0,
           topupBalance: 0,
+          adminBalance: 0,
           reservedCredits: 0,
           total: 0,
         }
@@ -366,32 +434,6 @@ export const createReservation = internalMutation({
     refId: v.optional(v.string()),
   },
   handler: async (ctx, args) => await reserveCredits(ctx, args),
-})
-
-export const createReservationBundle = internalMutation({
-  args: {
-    userId: v.string(),
-    reservations: v.array(
-      v.object({
-        credits: v.number(),
-        reservationKey: v.string(),
-        kind: v.string(),
-        refId: v.optional(v.string()),
-      })
-    ),
-  },
-  handler: async (ctx, args) => {
-    const ids = []
-    for (const reservation of args.reservations) {
-      ids.push(
-        await reserveCredits(ctx, {
-          userId: args.userId,
-          ...reservation,
-        })
-      )
-    }
-    return ids
-  },
 })
 
 export const recordProviderSuccess = internalMutation({

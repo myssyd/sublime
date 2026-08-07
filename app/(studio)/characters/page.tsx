@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useAction, useMutation, useQuery } from "convex/react"
 import {
   IconArrowLeft,
@@ -9,12 +10,11 @@ import {
   IconCheck,
   IconLoader2,
   IconPhotoUp,
-  IconPhoto,
   IconPlus,
   IconRefresh,
   IconSparkles,
   IconTextCaption,
-  IconTrash,
+  IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
@@ -56,7 +56,6 @@ export default function CharactersPage() {
   const createDraft = useMutation(api.characters.createDraft)
   const approveHero = useMutation(api.characters.approveHero)
   const discardDraft = useMutation(api.characters.discardDraft)
-  const removeCharacter = useMutation(api.characters.remove)
   const generateHero = useAction(api.characterGeneration.generateHero)
   const generateReferencePack = useAction(
     api.characterGeneration.generateReferencePack
@@ -228,7 +227,7 @@ export default function CharactersPage() {
       setDismissedDraftId(null)
       resetLocalBuilder()
       toast.success(`${draft.name} is ready`, {
-        description: "Seedream created a Kling-ready identity pack.",
+        description: "Seedream created a two-image Kling-ready identity lock.",
       })
     } catch (error) {
       track("generation_failed", {
@@ -260,7 +259,7 @@ export default function CharactersPage() {
       setDismissedDraftId(null)
       resetLocalBuilder()
       toast.success(`${draft.name} is ready`, {
-        description: "Seedream created a Kling-ready identity pack.",
+        description: "Seedream created a two-image Kling-ready identity lock.",
       })
     } catch (error) {
       track("generation_failed", {
@@ -345,7 +344,7 @@ export default function CharactersPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {["Source", "Hero", "References"].map((label, index) => {
+                {["Source", "Hero", "Full body"].map((label, index) => {
                   const step = index + 1
                   return (
                     <div key={label} className="flex items-center gap-2">
@@ -430,8 +429,8 @@ export default function CharactersPage() {
                       </h3>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         {sourceKind === "prompt"
-                          ? "Focus on stable physical traits. Pose, scene, and camera direction belong in the video step."
-                          : "A front-facing portrait plus another angle or full-body photo gives Seedream the strongest identity signal."}
+                          ? "Focus on stable physical traits. Characters default to a fit, fashion-forward Instagram look unless you specify another body or style."
+                          : "Clear photos give Seedream the strongest identity signal. Add direction if you want a specific body, outfit, or level of modesty."}
                       </p>
 
                       {sourceKind === "image" ? (
@@ -544,7 +543,7 @@ export default function CharactersPage() {
                             <Textarea
                               value={description}
                               onChange={(event) => setDescription(event.target.value)}
-                              placeholder="Keep the curls and freckles; use a simple black T-shirt…"
+                              placeholder="Keep the curls and freckles; use an athletic build and a fitted black evening look…"
                               className="min-h-28 resize-none"
                               maxLength={500}
                             />
@@ -585,7 +584,7 @@ export default function CharactersPage() {
               </div>
             ) : heroSelected ? (
               <div className="grid min-h-[560px] gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
-                <div className="grid grid-cols-3 gap-3 rounded-2xl bg-muted/25 p-4">
+                <div className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/25 p-4">
                   <div className="relative overflow-hidden rounded-xl bg-muted">
                     {draft.primaryImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -595,17 +594,15 @@ export default function CharactersPage() {
                       Frontal hero
                     </span>
                   </div>
-                  {["Three-quarter", "Full body"].map((label) => (
-                    <div key={label} className="relative grid min-h-96 place-items-center overflow-hidden rounded-xl border border-dashed bg-background/60">
-                      <div className="text-center text-muted-foreground">
-                        <IconLoader2 className="mx-auto size-5 animate-spin" />
-                        <p className="mt-2 text-xs">Generating {label.toLowerCase()}</p>
-                      </div>
-                      <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-1 text-[10px] font-medium backdrop-blur">
-                        {label}
-                      </span>
+                  <div className="relative grid min-h-96 place-items-center overflow-hidden rounded-xl border border-dashed bg-background/60">
+                    <div className="text-center text-muted-foreground">
+                      <IconLoader2 className="mx-auto size-5 animate-spin" />
+                      <p className="mt-2 text-xs">Generating full body</p>
                     </div>
-                  ))}
+                    <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-1 text-[10px] font-medium backdrop-blur">
+                      Full body
+                    </span>
+                  </div>
                 </div>
                 <aside className="flex flex-col justify-center rounded-2xl border bg-muted/20 p-6">
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
@@ -613,7 +610,7 @@ export default function CharactersPage() {
                   </span>
                   <h3 className="mt-3 text-2xl font-semibold">Building the identity pack</h3>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    The approved face is locked. Seedream is deriving a three-quarter and full-body reference for Kling.
+                    The approved face is locked. Seedream is deriving one polished full-body reference for Kling.
                   </p>
                   {draft.generationError ? (
                     <div className="mt-5 space-y-3">
@@ -627,7 +624,7 @@ export default function CharactersPage() {
                         disabled={working || Boolean(draft.generationStage)}
                       >
                         {working ? <IconLoader2 className="size-4 animate-spin" /> : <IconRefresh className="size-4" />}
-                        Retry reference pack
+                        Retry full body
                       </Button>
                     </div>
                   ) : null}
@@ -728,11 +725,11 @@ export default function CharactersPage() {
                       disabled={!effectiveSelectedHeroKey || working || Boolean(draft.generationStage)}
                     >
                       {working ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
-                      {working ? "Building references…" : "Approve & build references"}
+                      {working ? "Building full body…" : "Approve & build full body"}
                       {!working ? (
                         <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
                           <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
-                          20
+                          10
                         </span>
                       ) : null}
                     </Button>
@@ -769,40 +766,28 @@ export default function CharactersPage() {
                 <IconLoader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             ) : characters.length ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {characters.map((character) => (
-                  <article key={character._id} className="group overflow-hidden rounded-2xl border bg-card">
-                    <div className="relative aspect-[4/5] bg-muted">
-                      {character.primaryImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={character.primaryImageUrl} alt={character.name} className="size-full object-cover" />
-                      ) : null}
-                      <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur">
-                        <IconCheck className="size-3 text-primary" stroke={3} /> Kling ready
+                  <article
+                    key={character._id}
+                    className="group relative overflow-hidden rounded-2xl border bg-muted transition-colors duration-200 hover:border-primary/35"
+                  >
+                    <Link
+                      href={`/characters/${character._id}`}
+                      aria-label={`View ${character.name}`}
+                      className="block outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    >
+                      <div className="relative aspect-[4/5] overflow-hidden bg-muted">
+                        {character.primaryImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={character.primaryImageUrl} alt={character.name} className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.015] motion-reduce:transform-none" />
+                        ) : null}
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+                        <h3 className="absolute inset-x-4 bottom-4 truncate text-base font-semibold text-white drop-shadow-sm">
+                          {character.name}
+                        </h3>
                       </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!window.confirm(`Delete ${character.name}? Existing clones will remain in your library.`)) return
-                          await removeCharacter({ id: character._id })
-                          toast.success("Character deleted")
-                        }}
-                        className="absolute right-3 top-3 grid size-8 place-items-center rounded-lg bg-black/55 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus:opacity-100"
-                        aria-label={`Delete ${character.name}`}
-                      >
-                        <IconTrash className="size-4" />
-                      </button>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-semibold">{character.name}</h3>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        {character.sourcePrompt ?? character.identityPrompt ?? "Approved reusable identity"}
-                      </p>
-                      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <IconPhoto className="size-3.5" />
-                        {character.referenceImageKeys.length + 1} approved references
-                      </div>
-                    </div>
+                    </Link>
                   </article>
                 ))}
               </div>
@@ -810,7 +795,7 @@ export default function CharactersPage() {
               <div className="grid min-h-96 place-items-center rounded-2xl border border-dashed bg-card/60 p-8 text-center">
                 <div className="max-w-md">
                   <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-                    <IconPlus className="size-6" />
+                    <IconUsers className="size-6" />
                   </span>
                   <h3 className="mt-4 text-lg font-semibold">Build your first character</h3>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">

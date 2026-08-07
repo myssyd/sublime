@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Dialog } from "@base-ui/react/dialog"
 import { usePaginatedQuery, useQuery } from "convex/react"
 import {
@@ -65,11 +66,18 @@ function modelLabel(model: PhotoItem["model"]) {
 }
 
 export default function LibraryPage() {
+  const searchParams = useSearchParams()
   const characters = useQuery(api.characters.list)
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all")
-  const [characterFilter, setCharacterFilter] =
-    useState<CharacterFilter>("all")
+  const [selectedCharacterFilter, setSelectedCharacterFilter] =
+    useState<CharacterFilter | null>(null)
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null)
+  const requestedCharacterId = searchParams.get("character")
+  const requestedCharacter = characters?.find(
+    (character) => character._id === requestedCharacterId
+  )
+  const characterFilter: CharacterFilter =
+    selectedCharacterFilter ?? requestedCharacter?._id ?? "all"
   const { results: videos, status, loadMore } = usePaginatedQuery(
     api.videos.listPage,
     {
@@ -179,7 +187,7 @@ export default function LibraryPage() {
               <button
                 type="button"
                 aria-pressed={characterFilter === "all"}
-                onClick={() => setCharacterFilter("all")}
+                onClick={() => setSelectedCharacterFilter("all")}
                 className={cn(
                   "shrink-0 rounded-full border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
                   characterFilter === "all" &&
@@ -193,7 +201,7 @@ export default function LibraryPage() {
                   key={character._id}
                   type="button"
                   aria-pressed={characterFilter === character._id}
-                  onClick={() => setCharacterFilter(character._id)}
+                  onClick={() => setSelectedCharacterFilter(character._id)}
                   className={cn(
                     "flex shrink-0 items-center gap-2 rounded-full border bg-background py-1.5 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
                     characterFilter === character._id &&

@@ -135,18 +135,15 @@ async function generateBilledImage(
     referenceUrls?: string[]
     model?: ImageModel
     aspectRatio?: ImageAspectRatio
-    alreadyReserved?: boolean
   }
 ) {
-  if (!args.alreadyReserved) {
-    await ctx.runMutation(internal.credits.createReservation, {
-      userId: args.userId,
-      credits: args.credits,
-      reservationKey: args.reservationKey,
-      kind: args.kind,
-      refId: args.refId,
-    })
-  }
+  await ctx.runMutation(internal.credits.createReservation, {
+    userId: args.userId,
+    credits: args.credits,
+    reservationKey: args.reservationKey,
+    kind: args.kind,
+    refId: args.refId,
+  })
   const startedAt = Date.now()
   const fallbackModel =
     args.model === "nano-banana"
@@ -193,29 +190,32 @@ function heroPrompt(args: {
 }) {
   const source =
     args.sourceKind === "image"
-      ? `Use the supplied photographs as authoritative references for the same person. Preserve their exact recognizable facial identity, facial proportions, skin tone, hair, age, build, and distinctive features. Remove any surrounding text, logos, frames, other people, and distracting background details.${args.sourcePrompt ? ` Additional direction: ${args.sourcePrompt}` : ""}`
+      ? `Use the supplied photographs as authoritative references for the same person. Preserve their exact recognizable facial identity, facial proportions, skin tone, hair, adult age, and distinctive features. Remove any surrounding text, logos, frames, other people, and distracting background details.${args.sourcePrompt ? ` Additional direction: ${args.sourcePrompt}` : ""}`
       : `Create this person: ${args.sourcePrompt}`
   const adjustment = args.adjustment?.trim()
     ? `\nRequested adjustment: ${args.adjustment.trim()}`
     : ""
   return `${source}
 
-Create a canonical photorealistic identity-anchor portrait for video generation. Head-and-shoulders composition on a 4:5 canvas, face centered and large enough to inspect, eyes looking toward camera, clear front-facing facial geometry, natural relaxed expression, simple neutral studio background, soft even flattering light, and realistic skin texture. Use simple contemporary clothing without logos or text.
+Create a canonical photorealistic identity-anchor portrait for video generation. Head-and-shoulders composition on a 4:5 canvas, face centered and large enough to inspect, eyes looking toward camera, clear front-facing facial geometry, natural relaxed expression, simple neutral studio background, soft even flattering light, and realistic skin texture. Use flattering, fashion-forward contemporary clothing without logos or text.
+
+Present the character as an unmistakably adult, attractive Instagram creator with polished grooming, a fit and appealing physique, and a flattering fashion-forward outfit with confident, tasteful sex appeal. User direction about body type, clothing, styling, or modesty overrides these appearance defaults.
 
 One person only. No text, lettering, watermark, border, duplicate face, cropped head, heavy retouching, extreme expression, sunglasses, hat, face obstruction, or dramatic colored lighting.${adjustment}`
 }
 
-const THREE_QUARTER_PROMPT = `Generate a new photorealistic identity reference of the EXACT SAME PERSON shown in the approved hero image. Preserve facial identity, facial proportions, eye shape and spacing, nose, mouth, skin tone, hair, age, build, and distinctive features exactly.
+function fullBodyPrompt(userDirection?: string) {
+  const override = userDirection?.trim()
+    ? `\nUser direction (authoritative): ${userDirection.trim()}`
+    : ""
+  return `Generate a new photorealistic identity reference of the EXACT SAME ADULT PERSON shown in the approved hero image. Preserve facial identity, facial proportions, skin tone, hair, age, and distinctive features exactly.
 
-Show the person from the waist up in a natural three-quarter view, turned about 35 degrees from camera while keeping the full face clearly readable. Use the same simple clothing, neutral studio background, soft even lighting, and realistic skin texture as the hero. This is a clean supporting identity reference for video generation.
+Show the person standing naturally from head to feet on a 4:5 canvas, both feet fully visible, confident relaxed posture, face clearly readable, clean neutral studio background, soft flattering lighting, and realistic skin and fabric detail. This is the canonical full-body identity reference for video generation.
 
-One person only. No text, logos, props, sunglasses, hat, face obstruction, dramatic expression, duplicate body parts, or identity drift.`
+Continue the hero's styling into one coherent full look. Unless user direction specifies otherwise, give the character a fit, attractive, well-proportioned physique and a stylish, body-flattering, fashion-forward outfit suitable for a polished Instagram creator. The look should feel confident and sexy while remaining tasteful, wearable, and non-explicit. User direction about body type, clothing, styling, or modesty always overrides these appearance defaults.${override}
 
-const FULL_BODY_PROMPT = `Generate a new photorealistic identity reference of the EXACT SAME PERSON shown in the approved hero image. Preserve facial identity, facial proportions, skin tone, hair, age, body build, height impression, and distinctive features exactly.
-
-Show the person standing naturally from head to feet on a 4:5 canvas, both feet fully visible, relaxed neutral posture, face clearly readable, simple contemporary clothing consistent with the hero, clean neutral studio background, and soft even lighting. This is the canonical full-body identity reference for video generation.
-
-One person only. No text, logos, props, sunglasses, hat, face obstruction, cropped feet, distorted anatomy, extra limbs, dramatic pose, or identity drift.`
+One person only. No text, logos, props, sunglasses, hat, face obstruction, cropped feet, distorted anatomy, extra limbs, explicit nudity, or identity drift.`
+}
 
 async function storeGeneratedImage(
   ctx: ActionCtx,
@@ -313,55 +313,21 @@ export const generateReferencePack = action({
       const heroUrl = await r2.getUrl(character.primaryImageKey, {
         expiresIn: 60 * 60,
       })
-      const reservationKeys = [
-        `character-reference:${args.characterId}:three-quarter:${crypto.randomUUID()}`,
-        `character-reference:${args.characterId}:full-body:${crypto.randomUUID()}`,
-      ]
-      await ctx.runMutation(internal.credits.createReservationBundle, {
+      const generated = await generateBilledImage(ctx, {
         userId: user._id,
-        reservations: reservationKeys.map((reservationKey, index) => ({
-          reservationKey,
-          credits: CHARACTER_IMAGE_CREDITS,
-          kind: "character_reference",
-          refId: `${args.characterId}:${index}`,
-        })),
+        reservationKey: `character-reference:${args.characterId}:full-body:${crypto.randomUUID()}`,
+        credits: CHARACTER_IMAGE_CREDITS,
+        kind: "character_reference",
+        refId: `${args.characterId}:full-body`,
+        prompt: fullBodyPrompt(character.sourcePrompt),
+        referenceUrls: [heroUrl],
       })
-      const generationResults = await Promise.allSettled([
-        generateBilledImage(ctx, {
-          userId: user._id,
-          reservationKey: reservationKeys[0],
-          credits: CHARACTER_IMAGE_CREDITS,
-          kind: "character_reference",
-          refId: `${args.characterId}:three-quarter`,
-          prompt: THREE_QUARTER_PROMPT,
-          referenceUrls: [heroUrl],
-          alreadyReserved: true,
-        }),
-        generateBilledImage(ctx, {
-          userId: user._id,
-          reservationKey: reservationKeys[1],
-          credits: CHARACTER_IMAGE_CREDITS,
-          kind: "character_reference",
-          refId: `${args.characterId}:full-body`,
-          prompt: FULL_BODY_PROMPT,
-          referenceUrls: [heroUrl],
-          alreadyReserved: true,
-        }),
-      ])
-      const generated = generationResults.map((result) => {
-        if (result.status === "rejected") throw result.reason
-        return result.value
-      })
-      const labels = ["three-quarter", "full-body"]
-      const referenceImageKeys = await Promise.all(
-        generated.map((image, index) =>
-          storeGeneratedImage(
-            ctx,
-            image.blob,
-            `users/${user._id}/characters/${args.characterId}/references/${labels[index]}-${crypto.randomUUID()}.jpg`
-          )
-        )
+      const fullBodyImageKey = await storeGeneratedImage(
+        ctx,
+        generated.blob,
+        `users/${user._id}/characters/${args.characterId}/references/full-body-${crypto.randomUUID()}.jpg`
       )
+      const referenceImageKeys = [fullBodyImageKey]
       await ctx.runMutation(internal.characters.internalCompleteReferences, {
         id: args.characterId,
         userId: user._id,

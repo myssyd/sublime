@@ -88,6 +88,17 @@ export const list = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .collect()
+    const videos = await ctx.db
+      .query("videos")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect()
+    const videoCounts = new Map<string, number>()
+    for (const video of videos) {
+      videoCounts.set(
+        video.characterId,
+        (videoCounts.get(video.characterId) ?? 0) + 1
+      )
+    }
 
     return characters.flatMap((character) => {
       if (character.status === "draft" || !character.primaryImageKey) return []
@@ -97,9 +108,43 @@ export const list = query({
           primaryImageUrl: publicAssetUrl(character.primaryImageKey),
           referenceImageUrls: assetUrls(character.referenceImageKeys),
           creationImages: creationImages(character),
+          videoCount: videoCounts.get(character._id) ?? 0,
         },
       ]
     })
+  },
+})
+
+export const getById = query({
+  args: { id: v.string() },
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) return null
+    const id = ctx.db.normalizeId("characters", args.id)
+    if (!id) return null
+    const character = await ctx.db.get(id)
+    if (
+      !character ||
+      character.userId !== user._id ||
+      character.status === "draft" ||
+      !character.primaryImageKey
+    ) {
+      return null
+    }
+    const videos = await ctx.db
+      .query("videos")
+      .withIndex("by_user_character", (q) =>
+        q.eq("userId", user._id).eq("characterId", id)
+      )
+      .collect()
+
+    return {
+      ...character,
+      primaryImageUrl: publicAssetUrl(character.primaryImageKey),
+      referenceImageUrls: assetUrls(character.referenceImageKeys),
+      creationImages: creationImages(character),
+      videoCount: videos.length,
+    }
   },
 })
 
