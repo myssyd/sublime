@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { Dialog } from "@base-ui/react/dialog"
 import { useAction, useQuery } from "convex/react"
 import {
   IconArrowRight,
@@ -14,6 +15,7 @@ import {
   IconMovie,
   IconPaperclip,
   IconPhoto,
+  IconPlayerPlayFilled,
   IconPlus,
   IconUsers,
   IconVolume,
@@ -66,6 +68,18 @@ type PictureAttachment = {
   file: File
   previewUrl: string
 }
+
+type PreviewMedia =
+  | {
+      kind: "image"
+      url: string
+      alt: string
+    }
+  | {
+      kind: "video"
+      url: string
+      title: string
+    }
 
 const MAX_PICTURE_ATTACHMENTS = 4
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
@@ -332,6 +346,7 @@ export default function CreatePage() {
   const [prompt, setPrompt] = useState("")
   const [keepAudio, setKeepAudio] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null)
 
   const requestedCharacterId = searchParams.get("character")
   const requestedCharacter = characters?.find(
@@ -573,9 +588,6 @@ export default function CreatePage() {
       })
       setPicturePrompt("")
       clearPictureAttachments()
-      toast.success("Picture created", {
-        description: `It has been added to ${selectedCharacter?.name ?? "your character"}'s studio.`,
-      })
     } catch (error) {
       track("generation_failed", {
         kind: "picture",
@@ -662,7 +674,6 @@ export default function CreatePage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Your creative space"
         title="Studio"
         description="Choose a character, then create their next picture or video."
       />
@@ -773,15 +784,6 @@ export default function CreatePage() {
                   </div>
 
                   <TabsContent value="picture" className="p-5 pt-6 sm:p-6 sm:pt-6">
-                    <Textarea
-                      id="picture-direction"
-                      aria-label="Creative direction"
-                      value={picturePrompt}
-                      onChange={(event) => setPicturePrompt(event.target.value)}
-                      placeholder={`Put ${selectedCharacter?.name ?? "the character"} in a sunlit café, candid expression, warm editorial photography…`}
-                      className="min-h-32 resize-none"
-                    />
-
                     <input
                       ref={pictureFileInputRef}
                       type="file"
@@ -793,42 +795,30 @@ export default function CreatePage() {
                         event.currentTarget.value = ""
                       }}
                     />
-                    <div className="mt-3">
-                      <div className="flex items-center gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={
-                            generatingPicture ||
-                            pictureAttachments.length >= MAX_PICTURE_ATTACHMENTS
-                          }
-                          onClick={() => pictureFileInputRef.current?.click()}
-                          className="shrink-0"
-                        >
-                          <IconPaperclip className="size-3.5" /> Attach images
-                        </Button>
-                        <p className="text-[11px] leading-4 text-muted-foreground">
-                          Guide the outfit, pose, or setting · up to {MAX_PICTURE_ATTACHMENTS}
-                        </p>
-                      </div>
 
+                    <div className="overflow-hidden rounded-2xl border bg-background transition-shadow focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
                       {pictureAttachments.length ? (
-                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Attached image references">
+                        <div
+                          className="flex gap-2 overflow-x-auto px-3 pb-1 pt-3"
+                          aria-label="Attached image references"
+                        >
                           {pictureAttachments.map(({ file, previewUrl }, index) => (
-                            <div key={previewUrl} className="group relative size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
+                            <div
+                              key={previewUrl}
+                              className="group relative size-14 shrink-0"
+                            >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={previewUrl}
                                 alt={`Attached reference ${index + 1}: ${file.name}`}
-                                className="size-full object-cover"
+                                className="size-full rounded-xl object-cover ring-1 ring-border"
                               />
                               <button
                                 type="button"
                                 aria-label={`Remove ${file.name}`}
                                 disabled={generatingPicture}
                                 onClick={() => removePictureAttachment(previewUrl)}
-                                className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-black/65 text-white transition hover:bg-black/80 disabled:opacity-50"
+                                className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-foreground/80 text-background shadow-sm transition hover:bg-foreground disabled:opacity-50"
                               >
                                 <IconX className="size-3" stroke={2.5} />
                               </button>
@@ -836,9 +826,35 @@ export default function CreatePage() {
                           ))}
                         </div>
                       ) : null}
+
+                      <Textarea
+                        id="picture-direction"
+                        aria-label="Creative direction"
+                        value={picturePrompt}
+                        onChange={(event) => setPicturePrompt(event.target.value)}
+                        placeholder={`Put ${selectedCharacter?.name ?? "the character"} in a sunlit café, candid expression, warm editorial photography…`}
+                        className="min-h-32 rounded-none border-0 bg-transparent px-3 pb-2 pt-3 shadow-none focus:border-transparent focus:ring-0"
+                      />
+
+                      <div className="flex items-center px-2 pb-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={
+                            generatingPicture ||
+                            pictureAttachments.length >= MAX_PICTURE_ATTACHMENTS
+                          }
+                          onClick={() => pictureFileInputRef.current?.click()}
+                          aria-label={`Attach reference images. ${pictureAttachments.length} of ${MAX_PICTURE_ATTACHMENTS} attached.`}
+                          title="Attach reference images"
+                          className="size-8 px-0 text-muted-foreground hover:bg-foreground/[0.06]"
+                        >
+                          <IconPaperclip className="size-4" />
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="mt-7 grid grid-cols-2 gap-3">
+                    <div className="mt-5 grid grid-cols-2 gap-3">
                       <div className="min-w-0">
                         <Select
                           value={pictureModel}
@@ -1096,10 +1112,7 @@ export default function CreatePage() {
 
             <section className="min-w-0 space-y-6">
               <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-2xl font-semibold tracking-tight">Content</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Everything created with this character, in one place.</p>
-                </div>
+                <h2 className="text-2xl font-semibold tracking-tight">Content</h2>
                 <Link href="/library" className={buttonVariants({ variant: "outline", size: "sm" })}>Open full library</Link>
               </div>
 
@@ -1124,14 +1137,25 @@ export default function CreatePage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-1 bg-card p-1">
-                    {selectedCharacterPictures.map((picture, index) => (
-                      <article key={picture.key} className="group relative aspect-square overflow-hidden rounded-sm bg-muted">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={picture.url} alt={`${selectedCharacter?.name ?? "Character"} photo ${index + 1}`} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                      </article>
-                    ))}
+                  <div className="grid grid-cols-2 gap-1 bg-card p-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {selectedCharacterPictures.map((picture, index) => {
+                      const alt = `${selectedCharacter?.name ?? "Character"} photo ${index + 1}`
+                      return (
+                        <button
+                          key={picture.key}
+                          type="button"
+                          aria-label={`Preview ${alt}`}
+                          onClick={() =>
+                            setPreviewMedia({ kind: "image", url: picture.url, alt })
+                          }
+                          className="group relative aspect-square overflow-hidden rounded-sm bg-muted outline-none focus-visible:brightness-90"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={picture.url} alt={alt} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </section>
@@ -1172,7 +1196,32 @@ export default function CreatePage() {
                         >
                           <div className="relative aspect-[9/16] overflow-hidden bg-muted">
                             {generatedVideo.outputVideoUrl ? (
-                              <video src={generatedVideo.outputVideoUrl} controls playsInline preload="metadata" aria-label={`${generatedVideo.characterName} generated video`} className="size-full bg-black object-cover" />
+                              <button
+                                type="button"
+                                aria-label={`Preview ${generatedVideo.characterName} generated video`}
+                                onClick={() =>
+                                  setPreviewMedia({
+                                    kind: "video",
+                                    url: generatedVideo.outputVideoUrl!,
+                                    title: `${generatedVideo.characterName} generated video`,
+                                  })
+                                }
+                                className="relative size-full outline-none focus-visible:brightness-90"
+                              >
+                                <video
+                                  src={generatedVideo.outputVideoUrl}
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                  aria-hidden="true"
+                                  className="pointer-events-none size-full bg-black object-cover"
+                                />
+                                <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                                  <span className="grid size-11 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                                    <IconPlayerPlayFilled className="size-4" />
+                                  </span>
+                                </span>
+                              </button>
                             ) : generatedVideo.characterImageUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
@@ -1210,6 +1259,52 @@ export default function CreatePage() {
           </div>
         )}
       </main>
+
+      <Dialog.Root
+        open={previewMedia !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewMedia(null)
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+          <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 md:p-8">
+            <Dialog.Popup className="relative grid max-h-[85vh] w-fit max-w-[85vw] place-items-center overflow-hidden rounded-2xl bg-black shadow-2xl outline-none">
+              <Dialog.Title className="sr-only">
+                {previewMedia?.kind === "image" ? previewMedia.alt : previewMedia?.title}
+              </Dialog.Title>
+              <Dialog.Description className="sr-only">
+                Enlarged media preview
+              </Dialog.Description>
+              <Dialog.Close
+                aria-label="Close media preview"
+                className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-black/65 text-white outline-none backdrop-blur-sm transition hover:bg-black/80 focus-visible:bg-black/80"
+              >
+                <IconX className="size-4" />
+              </Dialog.Close>
+
+              {previewMedia?.kind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewMedia.url}
+                  alt={previewMedia.alt}
+                  className="max-h-[85vh] max-w-[85vw] animate-in rounded-2xl object-contain duration-300 fade-in-0 zoom-in-95 motion-reduce:animate-none"
+                />
+              ) : previewMedia?.kind === "video" ? (
+                <video
+                  key={previewMedia.url}
+                  src={previewMedia.url}
+                  controls
+                  autoPlay
+                  playsInline
+                  aria-label={previewMedia.title}
+                  className="max-h-[85vh] max-w-[85vw] animate-in rounded-2xl bg-black object-contain duration-300 fade-in-0 zoom-in-95 motion-reduce:animate-none"
+                />
+              ) : null}
+            </Dialog.Popup>
+          </Dialog.Viewport>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   )
 }

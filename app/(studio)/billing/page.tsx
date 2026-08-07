@@ -107,7 +107,6 @@ function BillingContent() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Plans & credits"
         title="Billing"
         description="Choose a plan, see exactly what each generation costs, and keep your studio moving."
       />

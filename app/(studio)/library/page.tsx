@@ -138,7 +138,6 @@ export default function LibraryPage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Your output"
         title="Library"
         description="Every photo and video created with your characters, ready to revisit or download."
         action={

@@ -5,12 +5,10 @@ import { BrandMark } from "@/components/brand-mark"
 import { CreditBalance } from "@/components/credit-balance"
 
 export function StudioHeader({
-  eyebrow,
   title,
   description,
   action,
 }: {
-  eyebrow?: string
   title: string
   description: string
   action?: React.ReactNode
@@ -20,11 +18,6 @@ export function StudioHeader({
       <BrandMark className="col-start-1 row-start-1 md:hidden" />
 
       <div className="col-span-3 row-start-2 min-w-0 md:col-span-1 md:col-start-1 md:row-start-1">
-        {eyebrow ? (
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            {eyebrow}
-          </p>
-        ) : null}
         <h1 className="text-2xl font-semibold tracking-tight md:text-[28px]">{title}</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
           {description}

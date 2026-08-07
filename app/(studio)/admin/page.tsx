@@ -97,7 +97,6 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Admin"
         title="Users"
         description="Review accounts and add complimentary credits to any user."
       />

@@ -43,7 +43,6 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Preferences"
         title="Settings"
         description="Manage how Sublime looks and behaves on this device."
       />

@@ -298,7 +298,6 @@ export default function CharactersPage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Identity system"
         title="Characters"
         description="Build reusable, Kling-ready identities with Seedream-generated portrait and full-body references."
         action={

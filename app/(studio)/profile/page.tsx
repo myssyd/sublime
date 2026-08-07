@@ -11,7 +11,6 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen">
       <StudioHeader
-        eyebrow="Account"
         title="Profile"
         description="View the identity connected to your Sublime account."
       />
