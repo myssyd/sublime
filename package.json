@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3004",
-    "dev:convex": "convex dev",
-    "dev:all": "bunx concurrently -n web,convex -c green,cyan \"bun run dev\" \"bun run dev:convex\"",
+    "dev": "bun run --parallel \"dev:*\"",
+    "dev:convex": "bunx convex dev",
+    "dev:next": "next dev --port 3004",
     "build": "next build",
     "start": "next start --port 3004",
     "cobalt:dev": "bunx node@22 node_modules/wrangler/bin/wrangler.js dev --config deploy/cobalt-cloudflare/wrangler.jsonc",
