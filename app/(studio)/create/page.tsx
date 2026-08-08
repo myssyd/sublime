@@ -360,7 +360,7 @@ const pictureModels = [
   },
   {
     value: "nano-banana",
-    label: "Nano Banana",
+    label: "Nano Banana 2",
     icon: "nanobanana",
     description: "Natural, prompt-faithful edits",
   },

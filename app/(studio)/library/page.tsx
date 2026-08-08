@@ -71,7 +71,7 @@ function formatDate(timestamp: number) {
 
 function modelLabel(model: PhotoItem["model"]) {
   if (model === "seedream-5") return "Seedream 5"
-  if (model === "nano-banana") return "Nano Banana"
+  if (model === "nano-banana") return "Nano Banana 2"
   return "Generated photo"
 }
 

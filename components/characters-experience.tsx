@@ -26,7 +26,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -130,7 +129,8 @@ export function CharactersExperience({
       retry: completingCharacter.retry,
     });
     toast.success(`${completingCharacter.name} is ready`, {
-      description: "Seedream created a two-image Kling-ready identity lock.",
+      description:
+        "Nano Banana 2 created a two-image Kling-ready identity lock.",
     });
     onCreated?.(completingCharacter.id);
     completingCharacterRef.current = null;
@@ -338,7 +338,7 @@ export function CharactersExperience({
       {standalone ? (
         <StudioHeader
           title="Characters"
-          description="Build reusable, Kling-ready identities with Seedream-generated portrait and full-body references."
+          description="Build reusable, Kling-ready identities with Nano Banana 2 portrait and full-body references."
           action={
             showHeaderAction ? (
               <Button size="sm" onClick={openBuilder}>
@@ -393,10 +393,6 @@ export function CharactersExperience({
                   <DialogTitle className="font-semibold">
                     Build a character
                   </DialogTitle>
-                  <DialogDescription className="mt-1 text-xs text-muted-foreground">
-                    Seedream 5 Pro creates the identity references used by
-                    Kling.
-                  </DialogDescription>
                 </div>
               </div>
 
@@ -425,12 +421,12 @@ export function CharactersExperience({
                           <button
                             type="button"
                             onClick={() => setSourceKind("prompt")}
-                            className="group flex min-h-36 flex-col rounded-xl border bg-muted/20 p-4 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/35 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none"
+                            className="group flex min-h-48 flex-col justify-center rounded-xl border bg-muted/20 p-5 text-left outline-none transition-[border-color,background-color,box-shadow] duration-200 hover:border-primary/50 hover:bg-accent/35 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
                               <IconTextCaption className="size-5" />
                             </span>
-                            <span className="mt-auto flex items-end justify-between gap-4 pt-7">
+                            <span className="mt-7 flex items-end justify-between gap-4">
                               <span>
                                 <span className="block text-base font-semibold">
                                   From a description
@@ -445,12 +441,12 @@ export function CharactersExperience({
                           <button
                             type="button"
                             onClick={() => setSourceKind("image")}
-                            className="group flex min-h-36 flex-col rounded-xl border bg-muted/20 p-4 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/35 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none"
+                            className="group flex min-h-48 flex-col justify-center rounded-xl border bg-muted/20 p-5 text-left outline-none transition-[border-color,background-color,box-shadow] duration-200 hover:border-primary/50 hover:bg-accent/35 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
                               <IconPhotoUp className="size-5" />
                             </span>
-                            <span className="mt-auto flex items-end justify-between gap-4 pt-7">
+                            <span className="mt-7 flex items-end justify-between gap-4">
                               <span>
                                 <span className="block text-base font-semibold">
                                   From photos
@@ -489,9 +485,9 @@ export function CharactersExperience({
                           </h3>
                           {sourceKind === "image" ? (
                             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                              Clear photos give Seedream the strongest identity
-                              signal. Add direction if you want a specific body,
-                              outfit, or level of modesty.
+                              Clear photos give Nano Banana 2 the strongest
+                              identity signal. Add direction if you want a
+                              specific body, outfit, or level of modesty.
                             </p>
                           ) : null}
 
@@ -764,7 +760,7 @@ export function CharactersExperience({
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         {referenceGenerationFailed
                           ? "Your approved hero is safe. Retry to finish the identity pack without starting over."
-                          : "The approved face is locked. Seedream is deriving one polished full-body reference for Kling."}
+                          : "The approved face is locked. Nano Banana 2 is deriving one polished full-body reference for Kling."}
                       </p>
                       {referenceGenerationFailed ? (
                         <div className="mt-5 space-y-3">
@@ -817,7 +813,7 @@ export function CharactersExperience({
                         <div className="text-center text-muted-foreground">
                           <IconLoader2 className="mx-auto size-6 animate-spin" />
                           <p className="mt-3 text-sm">
-                            Seedream is creating the hero…
+                            Nano Banana 2 is creating the hero…
                           </p>
                           <p className="mt-1 text-xs">
                             Draft saved. You can leave and return anytime.
@@ -997,7 +993,7 @@ export function CharactersExperience({
                 className="-mt-7 lg:-mt-10"
                 icon={IconUsers}
                 title="Build your first character"
-                description="Start with a description or reference photos. Seedream will create and normalize the identity images Kling needs."
+                description="Start with a description or reference photos. Nano Banana 2 will create and normalize the identity images Kling needs."
                 action={
                   <Button
                     onClick={() => {

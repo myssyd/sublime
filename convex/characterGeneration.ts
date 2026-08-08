@@ -19,8 +19,8 @@ import {
 
 const SEEDREAM_TEXT_MODEL = "bytedance/seedream/v5/pro/text-to-image"
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit"
-const NANO_BANANA_TEXT_MODEL = "fal-ai/nano-banana"
-const NANO_BANANA_EDIT_MODEL = "fal-ai/nano-banana/edit"
+const NANO_BANANA_TEXT_MODEL = "fal-ai/nano-banana-2"
+const NANO_BANANA_EDIT_MODEL = "fal-ai/nano-banana-2/edit"
 const MAX_PICTURE_ATTACHMENTS = 4
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -47,7 +47,7 @@ const IMAGE_SIZES: Record<
   "9:16": { width: 1152, height: 2048 },
 }
 
-type SeedreamResult = {
+type ImageModelResult = {
   requestId?: string
   data?: {
     images?: Array<{
@@ -77,6 +77,7 @@ async function generateImage(args: {
   referenceUrls?: string[]
   model?: PictureModel
   aspectRatio?: PictureAspectRatio
+  identityQuality?: boolean
 }) {
   const imageModel = args.model ?? "seedream-5"
   const aspectRatio = args.aspectRatio ?? "4:5"
@@ -97,7 +98,12 @@ async function generateImage(args: {
           aspect_ratio: aspectRatio,
           num_images: 1,
           output_format: "jpeg" as const,
+          resolution: args.identityQuality ? ("2K" as const) : ("1K" as const),
+          ...(args.identityQuality
+            ? { thinking_level: "high" as const }
+            : {}),
           limit_generations: true,
+          enable_web_search: false,
         }
       : {
           prompt: args.prompt,
@@ -106,7 +112,10 @@ async function generateImage(args: {
           num_images: 1,
           output_format: "jpeg" as const,
         }
-  const result = (await fal.subscribe(model, { input, logs: true })) as SeedreamResult
+  const result = (await fal.subscribe(model, {
+    input,
+    logs: true,
+  })) as ImageModelResult
   const outputUrl = result.data?.images?.[0]?.url
   if (!outputUrl) throw new Error("The image model returned no image")
   return {
@@ -128,6 +137,7 @@ async function generateBilledImage(
     referenceUrls?: string[]
     model?: PictureModel
     aspectRatio?: PictureAspectRatio
+    identityQuality?: boolean
   }
 ) {
   await ctx.runMutation(internal.credits.createReservation, {
@@ -140,7 +150,9 @@ async function generateBilledImage(
   const startedAt = Date.now()
   const fallbackModel =
     args.model === "nano-banana"
-      ? NANO_BANANA_EDIT_MODEL
+      ? args.referenceUrls?.length
+        ? NANO_BANANA_EDIT_MODEL
+        : NANO_BANANA_TEXT_MODEL
       : args.referenceUrls?.length
         ? SEEDREAM_EDIT_MODEL
         : SEEDREAM_TEXT_MODEL
@@ -176,6 +188,13 @@ async function generateBilledImage(
   }
 }
 
+const CHARACTER_PHOTOREALISM_STANDARD = `NON-NEGOTIABLE PHOTOREALISM STANDARD
+The result must be indistinguishable from a real professional photograph of a real adult human captured in a studio. It must not look illustrated, rendered, synthetic, or AI-generated.
+
+Render physically believable human anatomy and facial structure with subtle natural asymmetry. Preserve true skin micro-detail: visible pores, fine facial hair, faint expression lines, realistic under-eye texture, natural lip texture, and gentle tonal variation. Skin must retain texture and translucency rather than looking airbrushed, waxy, plastic, or over-retouched. Eyes must have anatomically correct pupils, catchlights, moisture, eyelids, and gaze. Hair must resolve into natural individual strands with believable density and flyaways. Teeth, ears, neck, shoulders, hands, and clothing must be anatomically and materially convincing whenever visible.
+
+Use coherent real-world optics, perspective, depth of field, exposure, shadows, and color response. Aim for the restrained finish of a high-end full-frame camera photograph with natural dynamic range and neutral color grading—not an HDR composite, beauty-filter selfie, CGI render, game character, fashion illustration, or hyper-sharpened stock image.`
+
 function heroPrompt(args: {
   sourceKind: "prompt" | "image"
   sourcePrompt?: string
@@ -183,31 +202,61 @@ function heroPrompt(args: {
 }) {
   const source =
     args.sourceKind === "image"
-      ? `Use the supplied photographs as authoritative references for the same person. Preserve their exact recognizable facial identity, facial proportions, skin tone, hair, adult age, and distinctive features. Remove any surrounding text, logos, frames, other people, and distracting background details.${args.sourcePrompt ? ` Additional direction: ${args.sourcePrompt}` : ""}`
-      : `Create this person: ${args.sourcePrompt}`
+      ? `IDENTITY SOURCE
+The supplied photographs are authoritative references for one and the same real person. Reconstruct that person's exact recognizable identity without beautifying them into someone else. Preserve facial geometry, face shape, eye shape and spacing, nose, mouth, jaw, ears, skin tone and undertone, apparent adult age, hairline, hair texture, and all distinctive features. Ignore and remove surrounding text, logos, frames, other people, filters, and background distractions.${args.sourcePrompt ? `
+Additional user direction: ${args.sourcePrompt}` : ""}`
+      : `CHARACTER SPECIFICATION
+Create one coherent, believable adult person matching this description exactly:
+${args.sourcePrompt}
+
+Treat every stated physical trait as authoritative. Fill in unstated details conservatively so the person feels genetically and anatomically coherent. Do not substitute a generic influencer face, change the requested ethnicity or apparent age, or erase distinctive traits such as freckles, scars, texture, facial proportions, or body type.`
   const adjustment = args.adjustment?.trim()
-    ? `\nRequested adjustment: ${args.adjustment.trim()}`
+    ? `\nREVISION REQUEST\n${args.adjustment.trim()}`
     : ""
-  return `${source}
+  return `${CHARACTER_PHOTOREALISM_STANDARD}
 
-Create a canonical photorealistic identity-anchor portrait for video generation. Head-and-shoulders composition on a 4:5 canvas, face centered and large enough to inspect, eyes looking toward camera, clear front-facing facial geometry, natural relaxed expression, simple neutral studio background, soft even flattering light, and realistic skin texture. Use flattering, fashion-forward contemporary clothing without logos or text.
+${source}
 
-Present the character as an unmistakably adult, attractive Instagram creator with polished grooming, a fit and appealing physique, and a flattering fashion-forward outfit with confident, tasteful sex appeal. User direction about body type, clothing, styling, or modesty overrides these appearance defaults.
+TASK
+Create a canonical identity-anchor portrait for consistent downstream image and video generation. This image is an identity record, so facial clarity and repeatability matter more than dramatic styling.
 
-One person only. No text, lettering, watermark, border, duplicate face, cropped head, heavy retouching, extreme expression, sunglasses, hat, face obstruction, or dramatic colored lighting.${adjustment}`
+COMPOSITION AND CAMERA
+- Vertical 4:5 head-and-shoulders portrait of exactly one adult person.
+- Straight-on or nearly straight-on camera angle at eye level; centered face with both eyes clearly visible and looking toward camera.
+- Natural, relaxed expression with closed or gently parted lips.
+- Simulate a full-frame camera with an 85mm portrait lens around f/4 for undistorted facial geometry and moderate, believable depth of field.
+- Soft large-source studio key light with gentle fill, neutral white balance, realistic shadow falloff, and a simple warm-gray or neutral studio background.
+- Keep the entire head, hair, neck, and shoulders inside frame. Make the face large enough to inspect at a glance.
+
+STYLING
+Present an unmistakably adult, polished contemporary creator with intentional but believable grooming and simple fashion-forward clothing without visible logos. Styling should support the person's identity rather than overpower it. User direction about body type, clothing, styling, disability, cultural dress, or modesty always overrides defaults.
+
+FINAL REJECTION RULES
+Reject any result with a generic beauty-filter face, identity ambiguity, doll-like skin, excessive symmetry, smeared or glassy eyes, malformed ears or teeth, duplicate features, cropped hair or head, dramatic colored lighting, extreme expression, sunglasses, hats, face obstruction, text, lettering, logo, watermark, border, or more than one person.${adjustment}`
 }
 
 function fullBodyPrompt(userDirection?: string) {
   const override = userDirection?.trim()
-    ? `\nUser direction (authoritative): ${userDirection.trim()}`
+    ? `\nAUTHORITATIVE USER DIRECTION\n${userDirection.trim()}`
     : ""
-  return `Generate a new photorealistic identity reference of the EXACT SAME ADULT PERSON shown in the approved hero image. Preserve facial identity, facial proportions, skin tone, hair, age, and distinctive features exactly.
+  return `${CHARACTER_PHOTOREALISM_STANDARD}
 
-Show the person standing naturally from head to feet on a 4:5 canvas, both feet fully visible, confident relaxed posture, face clearly readable, clean neutral studio background, soft flattering lighting, and realistic skin and fabric detail. This is the canonical full-body identity reference for video generation.
+IDENTITY LOCK
+Generate the EXACT SAME ADULT PERSON shown in the approved hero image. The hero is the sole authoritative identity source. Preserve the same face—not a similar person—including facial geometry, eye shape and spacing, nose, lips, jaw, ears, skin tone and undertone, apparent age, hairline, hairstyle, hair texture, and every distinctive feature. Preserve plausible body continuity with the visible neck and shoulders. Do not beautify, de-age, masculinize, feminize, or otherwise reinterpret the identity.
 
-Continue the hero's styling into one coherent full look. Unless user direction specifies otherwise, give the character a fit, attractive, well-proportioned physique and a stylish, body-flattering, fashion-forward outfit suitable for a polished Instagram creator. The look should feel confident and sexy while remaining tasteful, wearable, and non-explicit. User direction about body type, clothing, styling, or modesty always overrides these appearance defaults.${override}
+TASK AND COMPOSITION
+- Create one vertical 4:5 full-body studio photograph, head to toe, of exactly one person.
+- The full head, hair, both hands, legs, and both feet must be visible and uncropped.
+- Natural balanced standing pose with relaxed shoulders, believable weight distribution, and hands clearly separated from the torso.
+- Camera at approximately waist height using a normal-to-short-telephoto full-frame lens around 65mm to avoid distorted head, torso, hands, or legs.
+- Face remains front-facing or only slightly turned and clearly readable, with the same relaxed expression as the hero.
+- Match the hero's neutral studio lighting, white balance, skin response, and background so the two images feel captured in the same real photoshoot.
 
-One person only. No text, logos, props, sunglasses, hat, face obstruction, cropped feet, distorted anatomy, extra limbs, explicit nudity, or identity drift.`
+STYLING
+Extend the hero's styling into one coherent, tasteful, fashion-forward full look with physically realistic fabric, seams, folds, and contact shadows. Keep the requested body type; do not force an idealized physique. User direction about body shape, outfit, cultural dress, disability, styling, or modesty always overrides defaults.${override}
+
+FINAL REJECTION RULES
+Reject any result with identity drift, a generic or altered face, doll-like skin, a different apparent age, cropped head or feet, hidden hands, fused fingers, extra limbs, broken joints, impossible posture, distorted proportions, floating clothing, text, logo, watermark, props, sunglasses, hat, face obstruction, or more than one person.`
 }
 
 async function storeGeneratedImage(
@@ -260,6 +309,8 @@ export const generateHeroJob = internalAction({
           adjustment: args.adjustment,
         }),
         referenceUrls,
+        model: "nano-banana",
+        identityQuality: true,
       })
       const imageKey = await storeGeneratedImage(
         ctx,
@@ -314,6 +365,8 @@ export const generateReferencePackJob = internalAction({
         refId: `${args.characterId}:full-body`,
         prompt: fullBodyPrompt(character.sourcePrompt),
         referenceUrls: [heroUrl],
+        model: "nano-banana",
+        identityQuality: true,
       })
       const fullBodyImageKey = await storeGeneratedImage(
         ctx,
