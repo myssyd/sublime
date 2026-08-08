@@ -5,6 +5,8 @@
  * the browser only sends a typed plan + billing period to the checkout action.
  */
 
+import type { VideoModel } from "./lib/videoModel"
+
 export type PaidPlan = "starter" | "creator" | "pro"
 export type PlanId = "none" | PaidPlan
 export type BillingPeriod = "monthly" | "yearly"
@@ -47,11 +49,13 @@ export const TOPUP_AMOUNT = 600
 export const TOPUP_PRICE_USD = 15
 export const ANNUAL_CREDIT_MULTIPLIER = 12
 
-export const CREDIT_RATE_VERSION = 1
+export const CREDIT_RATE_VERSION = 2
 export const CHARACTER_IMAGE_CREDITS = 10
 export const NANO_BANANA_IMAGE_CREDITS = 5
 export const SEEDREAM_IMAGE_CREDITS = 10
 export const KLING_VIDEO_CREDITS_PER_SECOND = 20
+export const SEEDANCE_2_VIDEO_CREDITS_PER_SECOND = 35
+export const SEEDANCE_2_5_VIDEO_CREDITS_PER_SECOND = 70
 export const LIP_SYNC_CREDITS_PER_SECOND = 10
 
 export function imageCreditsForModel(model: "seedream-5" | "nano-banana") {
@@ -60,8 +64,17 @@ export function imageCreditsForModel(model: "seedream-5" | "nano-banana") {
     : SEEDREAM_IMAGE_CREDITS
 }
 
-export function videoCreditsForDuration(durationSeconds: number) {
-  return Math.ceil(durationSeconds) * KLING_VIDEO_CREDITS_PER_SECOND
+export function videoCreditsForDuration(
+  durationSeconds: number,
+  model: VideoModel = "kling-o3-pro"
+) {
+  const creditsPerSecond =
+    model === "seedance-2.5"
+      ? SEEDANCE_2_5_VIDEO_CREDITS_PER_SECOND
+      : model === "seedance-2.0-fast"
+        ? SEEDANCE_2_VIDEO_CREDITS_PER_SECOND
+        : KLING_VIDEO_CREDITS_PER_SECOND
+  return Math.ceil(durationSeconds) * creditsPerSecond
 }
 
 export function lipSyncCreditsForDuration(durationSeconds: number) {

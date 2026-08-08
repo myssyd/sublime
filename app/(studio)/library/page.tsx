@@ -14,6 +14,7 @@ import {
   IconMovie,
   IconPhoto,
   IconPlayerPlayFilled,
+  IconUsers,
   IconX,
 } from "@tabler/icons-react"
 import { api } from "@/convex/_generated/api"
@@ -21,6 +22,13 @@ import type { Id } from "@/convex/_generated/dataModel"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioEmptyState } from "@/components/studio-empty-state"
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 type MediaFilter = "all" | "photos" | "videos"
@@ -28,6 +36,7 @@ type CharacterFilter = "all" | Id<"characters">
 
 type PhotoItem = {
   kind: "photo"
+  _id: Id<"images">
   key: string
   url: string
   prompt: string
@@ -79,7 +88,11 @@ export default function LibraryPage() {
   )
   const characterFilter: CharacterFilter =
     selectedCharacterFilter ?? requestedCharacter?._id ?? "all"
-  const { results: videos, status, loadMore } = usePaginatedQuery(
+  const {
+    results: videos,
+    status: videoStatus,
+    loadMore: loadMoreVideos,
+  } = usePaginatedQuery(
     api.videos.listPage,
     {
       characterId:
@@ -87,25 +100,26 @@ export default function LibraryPage() {
     },
     { initialNumItems: 24 }
   )
-
-  const photos = useMemo<PhotoItem[]>(() => {
-    return (characters ?? [])
-      .flatMap((character) =>
-        (character.creationImages ?? []).map((photo) => ({
-          kind: "photo" as const,
-          ...photo,
-          characterId: character._id,
-          characterName: character.name,
-          characterImageUrl: character.primaryImageUrl,
-        }))
-      )
-      .filter(
-        (photo) =>
-          characterFilter === "all" ||
-          photo.characterId === characterFilter
-      )
-      .sort((a, b) => b.createdAt - a.createdAt)
-  }, [characterFilter, characters])
+  const {
+    results: imageResults,
+    status: imageStatus,
+    loadMore: loadMoreImages,
+  } = usePaginatedQuery(
+    api.images.listPage,
+    {
+      characterId:
+        characterFilter === "all" ? undefined : characterFilter,
+    },
+    { initialNumItems: 24 }
+  )
+  const photos = useMemo<PhotoItem[]>(
+    () =>
+      imageResults.map((image) => ({
+        kind: "photo" as const,
+        ...image,
+      })),
+    [imageResults]
+  )
 
   const items = useMemo(() => {
     if (mediaFilter === "photos") return photos
@@ -119,14 +133,29 @@ export default function LibraryPage() {
     )
   }, [mediaFilter, photos, videos])
 
-  const videosHaveMore = status === "CanLoadMore" || status === "LoadingMore"
+  const videosHaveMore =
+    videoStatus === "CanLoadMore" || videoStatus === "LoadingMore"
+  const imagesHaveMore =
+    imageStatus === "CanLoadMore" || imageStatus === "LoadingMore"
+  const hasMore =
+    mediaFilter === "photos"
+      ? imagesHaveMore
+      : mediaFilter === "videos"
+        ? videosHaveMore
+        : imagesHaveMore || videosHaveMore
+  const loadingMore =
+    (mediaFilter !== "videos" && imageStatus === "LoadingMore") ||
+    (mediaFilter !== "photos" && videoStatus === "LoadingMore")
   const initialLoading =
-    characters === undefined || status === "LoadingFirstPage"
+    characters === undefined ||
+    videoStatus === "LoadingFirstPage" ||
+    imageStatus === "LoadingFirstPage"
   const hasAnyContent =
     (characters ?? []).some(
       (character) =>
-        character.creationImages.length > 0 || character.videoCount > 0
-    ) || (characterFilter === "all" && videos.length > 0)
+        character.imageCount > 0 || character.videoCount > 0
+    ) ||
+    (characterFilter === "all" && (photos.length > 0 || videos.length > 0))
   const selectedCharacter =
     characterFilter === "all"
       ? null
@@ -155,10 +184,10 @@ export default function LibraryPage() {
 
       <div className="mx-auto max-w-[1500px] px-5 pb-10 md:px-8 lg:px-10">
         {!initialLoading && hasAnyContent ? (
-        <section className="border-y py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="border-b py-4 md:py-5">
+          <div className="flex items-center gap-2">
             <div
-              className="inline-flex w-fit items-center gap-1 rounded-full bg-muted p-1"
+              className="grid min-w-0 flex-1 grid-cols-3 gap-1 rounded-full bg-muted p-1 sm:flex sm:flex-none"
               role="group"
               aria-label="Filter by media type"
             >
@@ -175,7 +204,7 @@ export default function LibraryPage() {
                   aria-pressed={mediaFilter === value}
                   onClick={() => setMediaFilter(value)}
                   className={cn(
-                    "inline-flex h-8 items-center gap-2 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors",
+                    "inline-flex h-8 min-w-0 items-center justify-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground transition-colors sm:gap-2 sm:px-3",
                     mediaFilter === value &&
                       "bg-background text-foreground shadow-sm"
                   )}
@@ -183,51 +212,82 @@ export default function LibraryPage() {
                   {label}
                   <span className="text-[10px] tabular-nums text-muted-foreground">
                     {count}
-                    {value !== "photos" && videosHaveMore ? "+" : ""}
+                    {(value === "photos"
+                      ? imagesHaveMore
+                      : value === "videos"
+                        ? videosHaveMore
+                        : imagesHaveMore || videosHaveMore)
+                      ? "+"
+                      : ""}
                   </span>
                 </button>
               ))}
             </div>
 
-            <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 lg:justify-end">
-              <button
-                type="button"
-                aria-pressed={characterFilter === "all"}
-                onClick={() => setSelectedCharacterFilter("all")}
-                className={cn(
-                  "shrink-0 rounded-full border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
-                  characterFilter === "all" &&
-                    "border-primary bg-primary/10 text-foreground"
-                )}
+            <Select<CharacterFilter>
+              value={characterFilter}
+              onValueChange={(value) => {
+                if (value) setSelectedCharacterFilter(value as CharacterFilter)
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                aria-label="Filter by character"
+                className="w-32 shrink-0 rounded-full text-xs font-medium sm:ml-auto sm:w-44"
               >
-                All characters
-              </button>
-              {characters?.map((character) => (
-                <button
-                  key={character._id}
-                  type="button"
-                  aria-pressed={characterFilter === character._id}
-                  onClick={() => setSelectedCharacterFilter(character._id)}
-                  className={cn(
-                    "flex shrink-0 items-center gap-2 rounded-full border bg-background py-1.5 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
-                    characterFilter === character._id &&
-                      "border-primary bg-primary/10 text-foreground"
-                  )}
-                >
-                  <span className="size-6 overflow-hidden rounded-full bg-muted">
-                    {character.primaryImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={character.primaryImageUrl}
-                        alt=""
-                        className="size-full object-cover"
-                      />
-                    ) : null}
-                  </span>
-                  {character.name}
-                </button>
-              ))}
-            </div>
+                <SelectValue>
+                  {(value: CharacterFilter) => {
+                    const character =
+                      value === "all"
+                        ? null
+                        : characters?.find((item) => item._id === value)
+
+                    return (
+                      <>
+                        {character?.primaryImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={character.primaryImageUrl}
+                            alt=""
+                            className="size-5 rounded-full object-cover"
+                          />
+                        ) : (
+                          <IconUsers className="hidden size-4 text-muted-foreground sm:block" />
+                        )}
+                        <span className="truncate">
+                          {character?.name ?? "All characters"}
+                        </span>
+                      </>
+                    )
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent
+                align="end"
+                alignItemWithTrigger={false}
+                className="w-56"
+              >
+                <SelectItem value="all">
+                  <IconUsers className="size-4 text-muted-foreground" />
+                  <span>All characters</span>
+                </SelectItem>
+                {characters?.map((character) => (
+                  <SelectItem key={character._id} value={character._id}>
+                    <span className="size-6 shrink-0 overflow-hidden rounded-full bg-muted">
+                      {character.primaryImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={character.primaryImageUrl}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : null}
+                    </span>
+                    <span className="truncate">{character.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </section>
         ) : null}
@@ -256,7 +316,7 @@ export default function LibraryPage() {
               {items.map((item) =>
                 item.kind === "photo" ? (
                   <article
-                    key={`photo-${item.characterId}-${item.key}`}
+                    key={`photo-${item._id}`}
                     className="group min-w-0 overflow-hidden rounded-2xl border bg-card"
                   >
                     <div className="relative aspect-[4/5] overflow-hidden bg-muted">
@@ -389,17 +449,24 @@ export default function LibraryPage() {
               )}
             </section>
 
-            {mediaFilter !== "photos" && videosHaveMore ? (
+            {hasMore ? (
               <div className="flex justify-center pb-8">
                 <Button
                   variant="outline"
-                  onClick={() => loadMore(24)}
-                  disabled={status === "LoadingMore"}
+                  onClick={() => {
+                    if (mediaFilter !== "videos" && imagesHaveMore) {
+                      loadMoreImages(24)
+                    }
+                    if (mediaFilter !== "photos" && videosHaveMore) {
+                      loadMoreVideos(24)
+                    }
+                  }}
+                  disabled={loadingMore}
                 >
-                  {status === "LoadingMore" ? (
+                  {loadingMore ? (
                     <IconLoader2 className="size-4 animate-spin" />
                   ) : null}
-                  {status === "LoadingMore" ? "Loading…" : "Load more"}
+                  {loadingMore ? "Loading…" : "Load more"}
                 </Button>
               </div>
             ) : null}

@@ -9,7 +9,7 @@
 - Authentication in Convex functions comes from `authComponent.getAuthUser(ctx)`; do not accept a frontend-supplied user ID.
 - Workpool actions run without a browser session and must call internal Convex functions.
 - Store uploaded and generated media in the dedicated Sublime R2 bucket.
-- The intentional app tables are `characters`, `videos`, and `usage`. Remove obsolete tables when replacing a feature instead of leaving stale schemas or data behind.
+- The intentional content tables are `characters`, `images`, `videos`, and `usage`. Remove obsolete tables or embedded fields when replacing a feature instead of leaving stale schemas or data behind.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

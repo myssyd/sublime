@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Dialog } from "@base-ui/react/dialog"
-import { useAction, useQuery } from "convex/react"
+import { useAction, usePaginatedQuery, useQuery } from "convex/react"
 import {
   IconArrowRight,
   IconBolt,
   IconCheck,
+  IconDownload,
   IconFileUpload,
   IconLink,
   IconLoader2,
@@ -25,6 +26,8 @@ import {
 import { toast } from "sonner"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
+import type { CharacterImageSource } from "@/convex/lib/image"
+import type { VideoModel } from "@/convex/lib/videoModel"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioEmptyState } from "@/components/studio-empty-state"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -55,7 +58,7 @@ const MIN_AUDIO_SECONDS = 2
 const MAX_AUDIO_SECONDS = 60
 
 type CreateMode = "picture" | "reel-clone" | "lip-sync"
-type ContentMode = "photos" | "videos"
+type ContentMode = "all" | "photos" | "videos"
 type ReferenceSource = "upload" | "instagram"
 type FetchedReel = {
   key: string
@@ -71,6 +74,7 @@ type VideoImageOption = {
   key: string
   url: string
   label: string
+  source: CharacterImageSource
 }
 
 type PictureAttachment = {
@@ -90,6 +94,24 @@ type PreviewMedia =
       title: string
     }
 
+type ContentItem =
+  | {
+      kind: "image"
+      key: string
+      url: string
+      alt: string
+      createdAt: number
+    }
+  | {
+      kind: "video"
+      key: string
+      title: string
+      status: "queued" | "processing" | "completed" | "failed"
+      outputVideoUrl: string | null
+      thumbnailUrl: string | null
+      createdAt: number
+    }
+
 const MAX_PICTURE_ATTACHMENTS = 4
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -97,6 +119,224 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
 ])
+
+function ContentGallery({
+  items,
+  mode,
+  loading = false,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onPreview,
+}: {
+  items: ContentItem[]
+  mode: ContentMode
+  loading?: boolean
+  hasMore?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
+  onPreview: (media: PreviewMedia) => void
+}) {
+  if (loading && items.length === 0) {
+    return (
+      <div className="grid min-h-64 flex-1 place-items-center text-muted-foreground">
+        <IconLoader2 className="size-5 animate-spin" />
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    const emptyCopy =
+      mode === "photos"
+        ? {
+            icon: <IconPhoto className="size-5" />,
+            title: "No pictures yet",
+            description: "Use the Picture tab to create the first post.",
+          }
+        : mode === "videos"
+          ? {
+              icon: <IconMovie className="size-5" />,
+              title: "No videos yet",
+              description: "Use Reel Clone or Lip Sync to create the first performance.",
+            }
+          : {
+              icon: <IconPhoto className="size-5" />,
+              title: "No content yet",
+              description: "Create a picture or video to see it here.",
+            }
+
+    return (
+      <div className="grid min-h-64 flex-1 place-items-center px-6 text-center">
+        <div>
+          <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
+            {emptyCopy.icon}
+          </span>
+          <p className="mt-4 text-sm font-medium">{emptyCopy.title}</p>
+          <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">
+            {emptyCopy.description}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-[repeat(auto-fill,minmax(8.5rem,10rem))] sm:p-5">
+        {items.map((item) => {
+        if (item.kind === "image") {
+          return (
+            <article
+              key={item.key}
+              className="group relative aspect-[9/16] overflow-hidden rounded-xl bg-muted"
+            >
+              <button
+                type="button"
+                aria-label={`Preview ${item.alt}`}
+                onClick={() =>
+                  onPreview({ kind: "image", url: item.url, alt: item.alt })
+                }
+                className="size-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.url}
+                  alt={item.alt}
+                  className="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.025]"
+                />
+              </button>
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+              <a
+                href={item.url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Download ${item.alt}`}
+                title="Download"
+                className="absolute right-2 bottom-2 z-10 grid size-9 translate-y-2 place-items-center rounded-full bg-black/60 text-white opacity-0 shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-300 ease-out hover:bg-black/80 focus-visible:translate-y-0 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:outline-none group-hover:translate-y-0 group-hover:opacity-100"
+              >
+                <IconDownload className="size-4" />
+              </a>
+            </article>
+          )
+        }
+
+        const pending = item.status === "processing" || item.status === "queued"
+        return (
+          <article
+            key={item.key}
+            aria-label={`${item.title} ${item.status}`}
+            className="group overflow-hidden rounded-xl bg-muted"
+          >
+            <div className="relative aspect-[9/16] overflow-hidden bg-muted">
+              {item.outputVideoUrl ? (
+                <button
+                  type="button"
+                  aria-label={`Preview ${item.title}`}
+                  onMouseEnter={(event) => playVideoPreview(event.currentTarget)}
+                  onMouseLeave={(event) => stopVideoPreview(event.currentTarget)}
+                  onFocus={(event) => playVideoPreview(event.currentTarget)}
+                  onBlur={(event) => stopVideoPreview(event.currentTarget)}
+                  onClick={() =>
+                    onPreview({
+                      kind: "video",
+                      url: item.outputVideoUrl!,
+                      title: item.title,
+                    })
+                  }
+                  className="relative size-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+                >
+                  <video
+                    src={item.outputVideoUrl}
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    aria-hidden="true"
+                    className="pointer-events-none size-full bg-black object-cover"
+                  />
+                  <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10 opacity-100 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+                    <span className="grid size-11 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                      <IconPlayerPlayFilled className="size-4" />
+                    </span>
+                  </span>
+                </button>
+              ) : item.thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.thumbnailUrl}
+                  alt=""
+                  className={cn(
+                    "size-full object-cover",
+                    pending ? "opacity-40" : "opacity-55"
+                  )}
+                />
+              ) : pending ? (
+                <div className="size-full bg-muted-foreground/10" />
+              ) : null}
+              {pending ? (
+                <>
+                  <span className="sr-only">Generating video</span>
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-muted/15">
+                    <div className="video-processing-shimmer absolute inset-y-0 -left-2/3 w-2/3 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/15" />
+                  </div>
+                </>
+              ) : null}
+              {item.status === "failed" ? (
+                <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+                  Failed
+                </span>
+              ) : null}
+              {item.outputVideoUrl ? (
+                <a
+                  href={item.outputVideoUrl}
+                  download
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Download ${item.title}`}
+                  title="Download"
+                  className="absolute right-2 bottom-2 z-10 grid size-9 translate-y-2 place-items-center rounded-full bg-black/60 text-white opacity-0 shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-300 ease-out hover:bg-black/80 focus-visible:translate-y-0 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:outline-none group-hover:translate-y-0 group-hover:opacity-100"
+                >
+                  <IconDownload className="size-4" />
+                </a>
+              ) : null}
+            </div>
+          </article>
+        )
+        })}
+      </div>
+      {hasMore && onLoadMore ? (
+        <div className="flex justify-center border-t px-4 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={loadingMore}
+            onClick={onLoadMore}
+          >
+            {loadingMore ? <IconLoader2 className="size-4 animate-spin" /> : null}
+            {loadingMore ? "Loading…" : "Load more photos"}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+function playVideoPreview(target: HTMLButtonElement) {
+  const video = target.querySelector("video")
+  if (!video) return
+  void video.play().catch(() => {
+    // Some browsers may still block programmatic playback despite muted media.
+  })
+}
+
+function stopVideoPreview(target: HTMLButtonElement) {
+  const video = target.querySelector("video")
+  if (!video) return
+  video.pause()
+  video.currentTime = 0
+}
 
 const pictureModels = [
   {
@@ -112,6 +352,28 @@ const pictureModels = [
     description: "Natural, prompt-faithful edits",
   },
 ] as const
+
+const videoModels = [
+  {
+    value: "kling-o3-pro",
+    label: "Kling O3 Pro",
+    description: "Default · strongest identity lock",
+  },
+  {
+    value: "seedance-2.0-fast",
+    label: "Seedance 2.0",
+    description: "Multimodal motion transfer",
+  },
+  {
+    value: "seedance-2.5",
+    label: "Seedance 2.5",
+    description: "Latest quality · premium",
+  },
+] as const satisfies ReadonlyArray<{
+  value: VideoModel
+  label: string
+  description: string
+}>
 
 const pictureAspectRatios = [
   { value: "9:16", label: "Reel / Story", description: "Vertical" },
@@ -228,7 +490,6 @@ function formatFileSize(bytes: number) {
 function VideoReferencePair({
   videoSrc,
   videoTitle,
-  videoSource,
   imageOptions,
   selectedImage,
   imagePickerOpen,
@@ -237,7 +498,6 @@ function VideoReferencePair({
 }: {
   videoSrc: string
   videoTitle: string
-  videoSource: string
   imageOptions: VideoImageOption[]
   selectedImage: VideoImageOption
   imagePickerOpen: boolean
@@ -256,8 +516,8 @@ function VideoReferencePair({
         </span>
         <div className="min-w-0">
           <div className="flex h-6 items-center gap-2">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Character look
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              <IconPhoto className="size-3.5 shrink-0" /> Character look
             </p>
           </div>
           <button
@@ -286,11 +546,10 @@ function VideoReferencePair({
         </div>
 
         <div className="min-w-0">
-          <div className="flex h-6 items-center justify-between gap-2">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Source motion
+          <div className="flex h-6 items-center gap-2">
+            <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              <IconMovie className="size-3.5 shrink-0" /> Source motion
             </p>
-            <p className="truncate text-[11px] text-muted-foreground">{videoSource}</p>
           </div>
           <div className="mt-2 aspect-[9/16] overflow-hidden rounded-2xl bg-muted shadow-sm">
             <video
@@ -366,7 +625,8 @@ export default function CreatePage() {
     useState<PictureAspectRatio>("9:16")
   const [pictureAttachments, setPictureAttachments] = useState<PictureAttachment[]>([])
   const [generatingPicture, setGeneratingPicture] = useState(false)
-  const [videoCharacterImageKey, setVideoCharacterImageKey] = useState<string | null>(null)
+  const [videoCharacterImageSelection, setVideoCharacterImageSelection] =
+    useState<string | null>(null)
   const [videoImagePickerOpen, setVideoImagePickerOpen] = useState(false)
   const [referenceSource, setReferenceSource] = useState<ReferenceSource>("instagram")
   const [video, setVideo] = useState<File | null>(null)
@@ -378,12 +638,14 @@ export default function CreatePage() {
   const [reelError, setReelError] = useState<string | null>(null)
   const [prompt, setPrompt] = useState("")
   const [keepAudio, setKeepAudio] = useState(true)
+  const [videoModel, setVideoModel] =
+    useState<VideoModel>("kling-o3-pro")
   const [submitting, setSubmitting] = useState(false)
   const [audio, setAudio] = useState<File | null>(null)
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
   const [submittingLipSync, setSubmittingLipSync] = useState(false)
-  const [contentMode, setContentMode] = useState<ContentMode>("photos")
+  const [contentMode, setContentMode] = useState<ContentMode>("all")
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null)
 
   const requestedCharacterId = searchParams.get("character")
@@ -396,14 +658,54 @@ export default function CreatePage() {
     () => characters?.find((character) => character._id === activeCharacterId),
     [activeCharacterId, characters]
   )
+  const {
+    results: selectedCharacterPictures,
+    status: characterImageStatus,
+    loadMore: loadMoreCharacterImages,
+  } = usePaginatedQuery(
+    api.images.listPage,
+    activeCharacterId ? { characterId: activeCharacterId } : "skip",
+    { initialNumItems: 24 }
+  )
+  const characterImagesLoading = characterImageStatus === "LoadingFirstPage"
+  const characterImagesHaveMore =
+    characterImageStatus === "CanLoadMore" ||
+    characterImageStatus === "LoadingMore"
   const selectedCharacterVideos = useMemo(
     () => videos?.filter((item) => item.characterId === activeCharacterId),
     [activeCharacterId, videos]
   )
-  const selectedCharacterPictures = useMemo(() => {
-    if (!selectedCharacter) return []
-    return [...(selectedCharacter.creationImages ?? [])].reverse()
-  }, [selectedCharacter])
+  const photoContentItems = useMemo<ContentItem[]>(
+    () =>
+      selectedCharacterPictures.map((picture, index) => ({
+        kind: "image",
+        key: picture.key,
+        url: picture.url,
+        alt: `${selectedCharacter?.name ?? "Character"} photo ${index + 1}`,
+        createdAt: picture.createdAt,
+      })),
+    [selectedCharacter?.name, selectedCharacterPictures]
+  )
+  const videoContentItems = useMemo<ContentItem[]>(
+    () =>
+      (selectedCharacterVideos ?? []).map((video) => ({
+        kind: "video",
+        key: video._id,
+        title: `${video.characterName} generated video`,
+        status: video.status,
+        outputVideoUrl: video.outputVideoUrl,
+        thumbnailUrl: video.characterImageUrl,
+        createdAt: video.createdAt,
+      })),
+    [selectedCharacterVideos]
+  )
+  const allContentItems = useMemo(
+    () =>
+      [...photoContentItems, ...videoContentItems].sort(
+        (left, right) => right.createdAt - left.createdAt
+      ),
+    [photoContentItems, videoContentItems]
+  )
   const videoImageOptions = useMemo<VideoImageOption[]>(() => {
     if (!selectedCharacter?.primaryImageKey || !selectedCharacter.primaryImageUrl) {
       return []
@@ -413,6 +715,7 @@ export default function CreatePage() {
         key: selectedCharacter.primaryImageKey,
         url: selectedCharacter.primaryImageUrl,
         label: "Original look",
+        source: { kind: "identity", key: selectedCharacter.primaryImageKey },
       },
     ]
     selectedCharacter.referenceImageKeys.forEach((key, index) => {
@@ -422,19 +725,23 @@ export default function CreatePage() {
         key,
         url,
         label: index === 0 ? "Three-quarter look" : index === 1 ? "Full-body look" : `Reference ${index + 1}`,
+        source: { kind: "identity", key },
       })
     })
     selectedCharacterPictures.forEach((picture, index) => {
       options.push({
-        key: picture.key,
+        key: picture._id,
         url: picture.url,
         label: `Created look ${selectedCharacterPictures.length - index}`,
+        source: { kind: "generated", imageId: picture._id },
       })
     })
     return options
   }, [selectedCharacter, selectedCharacterPictures])
   const selectedVideoImage =
-    videoImageOptions.find((image) => image.key === videoCharacterImageKey) ??
+    videoImageOptions.find(
+      (image) => image.key === videoCharacterImageSelection
+    ) ??
     videoImageOptions[0] ??
     null
 
@@ -448,8 +755,13 @@ export default function CreatePage() {
   const selectedVideoDuration =
     referenceSource === "instagram" ? fetchedReel?.durationSeconds : videoDuration
   const videoCreditCost = selectedVideoDuration
-    ? videoCreditsForDuration(selectedVideoDuration)
+    ? videoCreditsForDuration(selectedVideoDuration, videoModel)
     : null
+  const videoDurationSupported =
+    selectedVideoDuration === null ||
+    selectedVideoDuration === undefined ||
+    videoModel === "kling-o3-pro" ||
+    selectedVideoDuration >= 4
   const lipSyncCreditCost = audioDuration
     ? lipSyncCreditsForDuration(audioDuration)
     : null
@@ -678,6 +990,10 @@ export default function CreatePage() {
 
   async function handleGenerateVideo() {
     if (!activeCharacterId || !hasReference || !selectedVideoImage) return
+    if (!videoDurationSupported) {
+      toast.error("Seedance requires a source video of at least 4 seconds")
+      return
+    }
     setSubmitting(true)
     try {
       const groupId = crypto.randomUUID()
@@ -705,23 +1021,26 @@ export default function CreatePage() {
         kind: "reel_clone",
         source_kind: referenceSource,
         keep_audio: keepAudio,
+        model: videoModel,
         duration_seconds: selectedVideoDuration,
         reused_source: reusedSource,
       })
       await createVideo({
         characterId: activeCharacterId,
-        characterImageKey: selectedVideoImage.key,
+        characterImage: selectedVideoImage.source,
         sourceVideoKey,
         sourceFileName,
         sourceKind: referenceSource,
         sourceUrl,
         prompt,
         keepAudio,
+        model: videoModel,
       })
       track("video_queued", {
         kind: "reel_clone",
         source_kind: referenceSource,
         keep_audio: keepAudio,
+        model: videoModel,
         duration_seconds: selectedVideoDuration,
         reused_source: reusedSource,
       })
@@ -738,6 +1057,7 @@ export default function CreatePage() {
       track("generation_failed", {
         kind: "reel_clone",
         source_kind: referenceSource,
+        model: videoModel,
       })
       toast.error("Could not start the clone", {
         description: error instanceof Error ? error.message : String(error),
@@ -764,7 +1084,7 @@ export default function CreatePage() {
       })
       await createLipSync({
         characterId: activeCharacterId,
-        characterImageKey: selectedVideoImage.key,
+        characterImage: selectedVideoImage.source,
         sourceAudioKey,
         sourceFileName: audio.name,
       })
@@ -830,7 +1150,7 @@ export default function CreatePage() {
                         aria-label={`${active ? "Selected character" : "Select character"}: ${character.name}`}
                         onClick={() => {
                           setCharacterId(character._id)
-                          setVideoCharacterImageKey(null)
+                          setVideoCharacterImageSelection(null)
                           setVideoImagePickerOpen(false)
                         }}
                         className="group w-12 shrink-0 text-center"
@@ -881,7 +1201,7 @@ export default function CreatePage() {
                     <h2 className="truncate text-lg font-semibold tracking-tight">{selectedCharacter?.name}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">AI character</p>
                     <p className="mt-2 text-[11px] font-medium text-muted-foreground">
-                      {selectedCharacterPictures.length} photos <span className="mx-1.5 text-border">•</span> {selectedCharacterVideos?.length ?? 0} videos
+                      {selectedCharacter?.imageCount ?? 0} photos <span className="mx-1.5 text-border">•</span> {selectedCharacter?.videoCount ?? 0} videos
                     </p>
                   </div>
                 </div>
@@ -1110,13 +1430,12 @@ export default function CreatePage() {
                             <VideoReferencePair
                               videoSrc={videoPreviewUrl}
                               videoTitle={video.name}
-                              videoSource="Upload"
                               imageOptions={videoImageOptions}
                               selectedImage={selectedVideoImage}
                               imagePickerOpen={videoImagePickerOpen}
                               onToggleImagePicker={() => setVideoImagePickerOpen((open) => !open)}
                               onSelectImage={(key) => {
-                                setVideoCharacterImageKey(key)
+                                setVideoCharacterImageSelection(key)
                                 setVideoImagePickerOpen(false)
                               }}
                             />
@@ -1171,19 +1490,72 @@ export default function CreatePage() {
                             <VideoReferencePair
                               videoSrc={fetchedReel.previewUrl}
                               videoTitle="Instagram Reel"
-                              videoSource="Instagram"
                               imageOptions={videoImageOptions}
                               selectedImage={selectedVideoImage}
                               imagePickerOpen={videoImagePickerOpen}
                               onToggleImagePicker={() => setVideoImagePickerOpen((open) => !open)}
                               onSelectImage={(key) => {
-                                setVideoCharacterImageKey(key)
+                                setVideoCharacterImageSelection(key)
                                 setVideoImagePickerOpen(false)
                               }}
                             />
                           ) : null}
                         </>
                       )}
+                    </div>
+
+                    <div className="mt-7">
+                      <label className="text-sm font-semibold">Video model</label>
+                      <Select
+                        value={videoModel}
+                        disabled={submitting}
+                        onValueChange={(value) => {
+                          if (value) setVideoModel(value as VideoModel)
+                        }}
+                      >
+                        <SelectTrigger
+                          aria-label={`Video model: ${videoModels.find((model) => model.value === videoModel)?.label}`}
+                          className="mt-3 h-11 w-full text-xs font-medium"
+                        >
+                          <SelectValue>
+                            {(value: VideoModel) => {
+                              const model = videoModels.find(
+                                (option) => option.value === value
+                              )
+                              return model ? (
+                                <>
+                                  <IconMovie className="size-4 text-muted-foreground" />
+                                  <span className="truncate">{model.label}</span>
+                                </>
+                              ) : null
+                            }}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent
+                          align="start"
+                          alignItemWithTrigger={false}
+                          className="w-72"
+                        >
+                          {videoModels.map((model) => (
+                            <SelectItem key={model.value} value={model.value}>
+                              <IconMovie className="size-4 text-muted-foreground" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block font-medium">
+                                  {model.label}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                                  {model.description}
+                                </span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!videoDurationSupported ? (
+                        <p className="mt-2 text-xs text-destructive">
+                          Seedance requires a source video of at least 4 seconds.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="mt-7">
@@ -1211,7 +1583,7 @@ export default function CreatePage() {
                       </button>
                     </div>
 
-                    <Button size="lg" className="mt-4 w-full text-sm" onClick={handleGenerateVideo} disabled={!selectedCharacter || !selectedVideoImage || !hasReference || submitting || fetchingReel}>
+                    <Button size="lg" className="mt-4 w-full text-sm" onClick={handleGenerateVideo} disabled={!selectedCharacter || !selectedVideoImage || !hasReference || !videoDurationSupported || submitting || fetchingReel}>
                       {submitting ? <IconLoader2 className="size-5 animate-spin" /> : null}
                       {submitting ? (referenceSource === "instagram" ? "Queuing clone…" : "Uploading & queuing…") : "Clone Reel"}
                       {!submitting && videoCreditCost ? (
@@ -1342,7 +1714,7 @@ export default function CreatePage() {
                                     aria-pressed={selected}
                                     aria-label={`Use ${image.label}`}
                                     onClick={() => {
-                                      setVideoCharacterImageKey(image.key)
+                                      setVideoCharacterImageSelection(image.key)
                                       setVideoImagePickerOpen(false)
                                     }}
                                     className={cn(
@@ -1386,151 +1758,69 @@ export default function CreatePage() {
               </section>
             </aside>
 
-            <section className="flex min-h-0 min-w-0 flex-col gap-6">
-              <div className="px-1">
-                <h2 className="text-2xl font-semibold tracking-tight">Content</h2>
-              </div>
-
+            <section className="flex min-h-0 min-w-0 flex-col">
               <Tabs
                 value={contentMode}
                 onValueChange={(value) => setContentMode(value as ContentMode)}
                 className="min-h-[clamp(22rem,52vh,36rem)] flex-1 overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)] lg:min-h-0"
               >
-                <div className="border-b px-4 py-3 sm:px-5">
-                  <TabsList aria-label="Content type" className="h-10">
-                    <TabsTrigger value="photos" className="gap-2 px-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
+                  <h2 className="text-xl font-semibold tracking-tight">Content</h2>
+                  <TabsList aria-label="Content type" className="h-10 shrink-0">
+                    <TabsTrigger value="all" className="gap-2 px-4">
+                      All
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {(selectedCharacter?.imageCount ?? 0) + (selectedCharacter?.videoCount ?? 0)}
+                      </span>
+                    </TabsTrigger>
+                    <TabsTrigger value="photos" className="gap-2 px-3 sm:px-4">
                       <IconPhoto className="size-4" />
                       Photos
                       <span className="text-[11px] tabular-nums text-muted-foreground">
-                        {selectedCharacterPictures.length}
+                        {selectedCharacter?.imageCount ?? 0}
                       </span>
                     </TabsTrigger>
-                    <TabsTrigger value="videos" className="gap-2 px-4">
+                    <TabsTrigger value="videos" className="gap-2 px-3 sm:px-4">
                       <IconMovie className="size-4" />
                       Videos
                       <span className="text-[11px] tabular-nums text-muted-foreground">
-                        {selectedCharacterVideos?.length ?? 0}
+                        {selectedCharacter?.videoCount ?? 0}
                       </span>
                     </TabsTrigger>
                   </TabsList>
                 </div>
 
+                <TabsContent value="all" className="flex min-h-0 flex-col lg:overflow-y-auto">
+                  <ContentGallery
+                    items={allContentItems}
+                    mode="all"
+                    loading={characterImagesLoading || selectedCharacterVideos === undefined}
+                    hasMore={characterImagesHaveMore}
+                    loadingMore={characterImageStatus === "LoadingMore"}
+                    onLoadMore={() => loadMoreCharacterImages(24)}
+                    onPreview={setPreviewMedia}
+                  />
+                </TabsContent>
+
                 <TabsContent value="photos" className="flex min-h-0 flex-col lg:overflow-y-auto">
-                  {selectedCharacterPictures.length === 0 ? (
-                    <div className="grid min-h-64 flex-1 place-items-center px-6 text-center">
-                      <div>
-                        <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconPhoto className="size-5" /></span>
-                        <p className="mt-4 text-sm font-medium">No pictures yet</p>
-                        <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Use the Picture tab to create the first post.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-4 xl:grid-cols-5">
-                      {selectedCharacterPictures.map((picture, index) => {
-                        const alt = `${selectedCharacter?.name ?? "Character"} photo ${index + 1}`
-                        return (
-                          <button
-                            key={picture.key}
-                            type="button"
-                            aria-label={`Preview ${alt}`}
-                            onClick={() =>
-                              setPreviewMedia({ kind: "image", url: picture.url, alt })
-                            }
-                            className="group relative aspect-square overflow-hidden rounded-xl bg-muted outline-none focus-visible:brightness-90"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={picture.url} alt={alt} className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025]" />
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <ContentGallery
+                    items={photoContentItems}
+                    mode="photos"
+                    loading={characterImagesLoading}
+                    hasMore={characterImagesHaveMore}
+                    loadingMore={characterImageStatus === "LoadingMore"}
+                    onLoadMore={() => loadMoreCharacterImages(24)}
+                    onPreview={setPreviewMedia}
+                  />
                 </TabsContent>
 
                 <TabsContent value="videos" className="flex min-h-0 flex-col lg:overflow-y-auto">
-                  {selectedCharacterVideos === undefined ? (
-                    <div className="grid min-h-64 flex-1 place-items-center text-muted-foreground"><IconLoader2 className="size-5 animate-spin" /></div>
-                  ) : selectedCharacterVideos.length === 0 ? (
-                    <div className="grid min-h-64 flex-1 place-items-center px-6 text-center">
-                      <div>
-                        <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-5" /></span>
-                        <p className="mt-4 text-sm font-medium">No videos yet</p>
-                        <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Use Reel Clone or Lip Sync to create the first performance.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-4 xl:grid-cols-5">
-                      {selectedCharacterVideos.map((generatedVideo) => {
-                        const pending =
-                          generatedVideo.status === "processing" ||
-                          generatedVideo.status === "queued"
-                        return (
-                          <article
-                            key={generatedVideo._id}
-                            aria-label={`${generatedVideo.characterName} video ${generatedVideo.status}`}
-                            className="group overflow-hidden rounded-xl bg-muted"
-                          >
-                            <div className="relative aspect-square overflow-hidden bg-muted">
-                              {generatedVideo.outputVideoUrl ? (
-                                <button
-                                  type="button"
-                                  aria-label={`Preview ${generatedVideo.characterName} generated video`}
-                                  onClick={() =>
-                                    setPreviewMedia({
-                                      kind: "video",
-                                      url: generatedVideo.outputVideoUrl!,
-                                      title: `${generatedVideo.characterName} generated video`,
-                                    })
-                                  }
-                                  className="relative size-full outline-none focus-visible:brightness-90"
-                                >
-                                  <video
-                                    src={generatedVideo.outputVideoUrl}
-                                    muted
-                                    playsInline
-                                    preload="metadata"
-                                    aria-hidden="true"
-                                    className="pointer-events-none size-full bg-black object-cover"
-                                  />
-                                  <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                    <span className="grid size-11 place-items-center rounded-full bg-black/65 text-white backdrop-blur-sm">
-                                      <IconPlayerPlayFilled className="size-4" />
-                                    </span>
-                                  </span>
-                                </button>
-                              ) : generatedVideo.characterImageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={generatedVideo.characterImageUrl}
-                                  alt=""
-                                  className={cn(
-                                    "size-full object-cover",
-                                    pending ? "opacity-40" : "opacity-55"
-                                  )}
-                                />
-                              ) : pending ? (
-                                <div className="size-full bg-muted-foreground/10" />
-                              ) : null}
-                              {pending ? (
-                                <>
-                                  <span className="sr-only">Generating video</span>
-                                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-muted/15">
-                                    <div className="video-processing-shimmer absolute inset-y-0 -left-2/3 w-2/3 bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/15" />
-                                  </div>
-                                </>
-                              ) : null}
-                              {generatedVideo.status === "failed" ? (
-                                <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
-                                  Failed
-                                </span>
-                              ) : null}
-                            </div>
-                          </article>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <ContentGallery
+                    items={videoContentItems}
+                    mode="videos"
+                    loading={selectedCharacterVideos === undefined}
+                    onPreview={setPreviewMedia}
+                  />
                 </TabsContent>
               </Tabs>
             </section>
@@ -1545,9 +1835,14 @@ export default function CreatePage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm duration-300 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
           <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 md:p-8">
-            <Dialog.Popup className="relative grid max-h-[85vh] w-fit max-w-[85vw] place-items-center overflow-hidden rounded-2xl bg-black shadow-2xl outline-none">
+            <Dialog.Popup
+              className={cn(
+                "relative grid max-h-[85vh] w-fit max-w-[85vw] place-items-center overflow-hidden rounded-2xl shadow-2xl outline-none duration-300 ease-out data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none",
+                previewMedia?.kind === "video" ? "bg-black" : "bg-transparent"
+              )}
+            >
               <Dialog.Title className="sr-only">
                 {previewMedia?.kind === "image" ? previewMedia.alt : previewMedia?.title}
               </Dialog.Title>
@@ -1566,7 +1861,7 @@ export default function CreatePage() {
                 <img
                   src={previewMedia.url}
                   alt={previewMedia.alt}
-                  className="max-h-[85vh] max-w-[85vw] animate-in rounded-2xl object-contain duration-300 fade-in-0 zoom-in-95 motion-reduce:animate-none"
+                  className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain"
                 />
               ) : previewMedia?.kind === "video" ? (
                 <video
@@ -1576,7 +1871,7 @@ export default function CreatePage() {
                   autoPlay
                   playsInline
                   aria-label={previewMedia.title}
-                  className="max-h-[85vh] max-w-[85vw] animate-in rounded-2xl bg-black object-contain duration-300 fade-in-0 zoom-in-95 motion-reduce:animate-none"
+                  className="max-h-[85vh] max-w-[85vw] rounded-2xl bg-black object-contain"
                 />
               ) : null}
             </Dialog.Popup>

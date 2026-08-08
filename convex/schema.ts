@@ -1,23 +1,10 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
-
-const pictureModel = v.union(
-  v.literal("seedream-5"),
-  v.literal("nano-banana")
-)
-
-const pictureAspectRatio = v.union(
-  v.literal("21:9"),
-  v.literal("16:9"),
-  v.literal("3:2"),
-  v.literal("4:3"),
-  v.literal("5:4"),
-  v.literal("1:1"),
-  v.literal("4:5"),
-  v.literal("3:4"),
-  v.literal("2:3"),
-  v.literal("9:16")
-)
+import {
+  pictureAspectRatioValidator,
+  pictureModelValidator,
+} from "./lib/image"
+import { videoModelValidator } from "./lib/videoModel"
 
 export default defineSchema({
   characters: defineTable({
@@ -32,19 +19,8 @@ export default defineSchema({
     sourcePrompt: v.optional(v.string()),
     sourceImageKeys: v.optional(v.array(v.string())),
     heroCandidateKeys: v.optional(v.array(v.string())),
-    creationImages: v.optional(
-      v.array(
-        v.object({
-          key: v.string(),
-          prompt: v.string(),
-          model: pictureModel,
-          aspectRatio: pictureAspectRatio,
-          createdAt: v.number(),
-        })
-      )
-    ),
-    // Kept temporarily so any pre-metadata creations remain readable.
-    creationImageKeys: v.optional(v.array(v.string())),
+    imageCount: v.number(),
+    videoCount: v.number(),
     generationStage: v.optional(
       v.union(v.literal("hero"), v.literal("references"))
     ),
@@ -53,6 +29,22 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
+  images: defineTable({
+    userId: v.string(),
+    characterId: v.id("characters"),
+    key: v.string(),
+    prompt: v.string(),
+    model: pictureModelValidator,
+    aspectRatio: pictureAspectRatioValidator,
+    createdAt: v.number(),
+  })
+    .index("by_user_created_at", ["userId", "createdAt"])
+    .index("by_user_character_created_at", [
+      "userId",
+      "characterId",
+      "createdAt",
+    ]),
+
   videos: defineTable({
     userId: v.string(),
     characterId: v.id("characters"),
@@ -60,6 +52,7 @@ export default defineSchema({
       v.union(v.literal("reel_clone"), v.literal("lip_sync"))
     ),
     characterImageKey: v.optional(v.string()),
+    characterImageId: v.optional(v.id("images")),
     sourceVideoKey: v.optional(v.string()),
     sourceAudioKey: v.optional(v.string()),
     sourceAudioContentType: v.optional(v.string()),
@@ -72,8 +65,11 @@ export default defineSchema({
     sourceFileSize: v.optional(v.number()),
     prompt: v.string(),
     keepAudio: v.boolean(),
+    model: v.optional(videoModelValidator),
     provider: v.union(
       v.literal("fal-kling-o3-pro"),
+      v.literal("fal-seedance-2.0-fast"),
+      v.literal("fal-seedance-2.5"),
       v.literal("fal-sync-lipsync-v3")
     ),
     status: v.union(

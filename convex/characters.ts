@@ -1,6 +1,9 @@
 import { v } from "convex/values"
+import { vOnCompleteArgs } from "@convex-dev/workpool"
 import { authComponent } from "./auth"
 import { publicAssetUrl, r2 } from "./assets"
+import { videoPool } from "./jobs"
+import { internal } from "./_generated/api"
 import {
   internalMutation,
   internalQuery,
@@ -33,51 +36,6 @@ function assetUrls(keys: string[]) {
     .filter((url): url is string => Boolean(url))
 }
 
-function creationImages(character: {
-  creationImages?: Array<{
-    key: string
-    prompt: string
-    model: "seedream-5" | "nano-banana"
-    aspectRatio:
-      | "21:9"
-      | "16:9"
-      | "3:2"
-      | "4:3"
-      | "5:4"
-      | "1:1"
-      | "4:5"
-      | "3:4"
-      | "2:3"
-      | "9:16"
-    createdAt: number
-  }>
-  creationImageKeys?: string[]
-  updatedAt: number
-}) {
-  const current = (character.creationImages ?? []).flatMap((image) => {
-    const url = publicAssetUrl(image.key)
-    return url ? [{ ...image, url }] : []
-  })
-  const currentKeys = new Set(current.map((image) => image.key))
-  const legacy = (character.creationImageKeys ?? []).flatMap((key, index) => {
-    if (currentKeys.has(key)) return []
-    const url = publicAssetUrl(key)
-    return url
-      ? [
-          {
-            key,
-            url,
-            prompt: "",
-            model: null,
-            aspectRatio: null,
-            createdAt: character.updatedAt + index,
-          },
-        ]
-      : []
-  })
-  return [...current, ...legacy]
-}
-
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -88,18 +46,6 @@ export const list = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .collect()
-    const videos = await ctx.db
-      .query("videos")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect()
-    const videoCounts = new Map<string, number>()
-    for (const video of videos) {
-      videoCounts.set(
-        video.characterId,
-        (videoCounts.get(video.characterId) ?? 0) + 1
-      )
-    }
-
     return characters.flatMap((character) => {
       if (character.status === "draft" || !character.primaryImageKey) return []
       return [
@@ -107,8 +53,8 @@ export const list = query({
           ...character,
           primaryImageUrl: publicAssetUrl(character.primaryImageKey),
           referenceImageUrls: assetUrls(character.referenceImageKeys),
-          creationImages: creationImages(character),
-          videoCount: videoCounts.get(character._id) ?? 0,
+          imageCount: character.imageCount,
+          videoCount: character.videoCount,
         },
       ]
     })
@@ -131,19 +77,12 @@ export const getById = query({
     ) {
       return null
     }
-    const videos = await ctx.db
-      .query("videos")
-      .withIndex("by_user_character", (q) =>
-        q.eq("userId", user._id).eq("characterId", id)
-      )
-      .collect()
-
     return {
       ...character,
       primaryImageUrl: publicAssetUrl(character.primaryImageKey),
       referenceImageUrls: assetUrls(character.referenceImageKeys),
-      creationImages: creationImages(character),
-      videoCount: videos.length,
+      imageCount: character.imageCount,
+      videoCount: character.videoCount,
     }
   },
 })
@@ -239,7 +178,7 @@ export const createDraft = mutation({
     )
 
     const now = Date.now()
-    return ctx.db.insert("characters", {
+    const characterId = await ctx.db.insert("characters", {
       userId: user._id,
       name,
       sourceKind: args.sourceKind,
@@ -247,11 +186,25 @@ export const createDraft = mutation({
       sourceImageKeys: args.sourceImageKeys,
       heroCandidateKeys: [],
       referenceImageKeys: [],
+      imageCount: 0,
+      videoCount: 0,
       isAiCharacter: true,
       status: "draft",
+      generationStage: "hero",
       createdAt: now,
       updatedAt: now,
     })
+    await videoPool.enqueueAction(
+      ctx,
+      internal.characterGeneration.generateHeroJob,
+      { characterId, userId: user._id },
+      {
+        retry: false,
+        onComplete: internal.characters.internalGenerationFinished,
+        context: { characterId, stage: "hero" },
+      }
+    )
+    return characterId
   },
 })
 
@@ -264,15 +217,100 @@ export const approveHero = mutation({
     if (!character || character.userId !== user._id) {
       throw new Error("Character draft not found")
     }
+    if (character.generationStage) throw new Error("Generation is already running")
     if (!(character.heroCandidateKeys ?? []).includes(args.imageKey)) {
       throw new Error("Hero candidate not found")
     }
     await ctx.db.patch(args.id, {
       primaryImageKey: args.imageKey,
       referenceImageKeys: [],
+      generationStage: "references",
       generationError: undefined,
       updatedAt: Date.now(),
     })
+    await videoPool.enqueueAction(
+      ctx,
+      internal.characterGeneration.generateReferencePackJob,
+      { characterId: args.id, userId: user._id },
+      {
+        retry: false,
+        onComplete: internal.characters.internalGenerationFinished,
+        context: { characterId: args.id, stage: "references" },
+      }
+    )
+  },
+})
+
+export const queueHero = mutation({
+  args: {
+    id: v.id("characters"),
+    adjustment: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) throw new Error("Not authenticated")
+    const character = await ctx.db.get(args.id)
+    if (
+      !character ||
+      character.userId !== user._id ||
+      character.status !== "draft" ||
+      !character.sourceKind
+    ) {
+      throw new Error("Character draft not found")
+    }
+    if (character.generationStage) throw new Error("Generation is already running")
+    const adjustment = args.adjustment?.trim() || undefined
+    if (adjustment && adjustment.length > 240) {
+      throw new Error("Adjustment is too long")
+    }
+    await ctx.db.patch(args.id, {
+      generationStage: "hero",
+      generationError: undefined,
+      updatedAt: Date.now(),
+    })
+    await videoPool.enqueueAction(
+      ctx,
+      internal.characterGeneration.generateHeroJob,
+      { characterId: args.id, userId: user._id, adjustment },
+      {
+        retry: false,
+        onComplete: internal.characters.internalGenerationFinished,
+        context: { characterId: args.id, stage: "hero" },
+      }
+    )
+  },
+})
+
+export const queueReferencePack = mutation({
+  args: { id: v.id("characters") },
+  handler: async (ctx, args) => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) throw new Error("Not authenticated")
+    const character = await ctx.db.get(args.id)
+    if (
+      !character ||
+      character.userId !== user._id ||
+      character.status !== "draft" ||
+      !character.primaryImageKey
+    ) {
+      throw new Error("Approve a hero first")
+    }
+    if (character.generationStage) throw new Error("Generation is already running")
+    await ctx.db.patch(args.id, {
+      generationStage: "references",
+      generationError: undefined,
+      updatedAt: Date.now(),
+    })
+    await videoPool.enqueueAction(
+      ctx,
+      internal.characterGeneration.generateReferencePackJob,
+      { characterId: args.id, userId: user._id },
+      {
+        retry: false,
+        onComplete: internal.characters.internalGenerationFinished,
+        context: { characterId: args.id, stage: "references" },
+      }
+    )
   },
 })
 
@@ -307,26 +345,6 @@ export const internalGetOwned = internalQuery({
   handler: async (ctx, args) => {
     const character = await ctx.db.get(args.id)
     return character?.userId === args.userId ? character : null
-  },
-})
-
-export const internalBeginGeneration = internalMutation({
-  args: {
-    id: v.id("characters"),
-    userId: v.string(),
-    stage: generationStageValidator,
-  },
-  handler: async (ctx, args) => {
-    const character = await ctx.db.get(args.id)
-    if (!character || character.userId !== args.userId || character.status !== "draft") {
-      throw new Error("Character draft not found")
-    }
-    if (character.generationStage) throw new Error("Generation is already running")
-    await ctx.db.patch(args.id, {
-      generationStage: args.stage,
-      generationError: undefined,
-      updatedAt: Date.now(),
-    })
   },
 })
 
@@ -375,51 +393,6 @@ export const internalCompleteReferences = internalMutation({
   },
 })
 
-export const internalAppendCreationImage = internalMutation({
-  args: {
-    id: v.id("characters"),
-    userId: v.string(),
-    imageKey: v.string(),
-    prompt: v.string(),
-    model: v.union(v.literal("seedream-5"), v.literal("nano-banana")),
-    aspectRatio: v.union(
-      v.literal("21:9"),
-      v.literal("16:9"),
-      v.literal("3:2"),
-      v.literal("4:3"),
-      v.literal("5:4"),
-      v.literal("1:1"),
-      v.literal("4:5"),
-      v.literal("3:4"),
-      v.literal("2:3"),
-      v.literal("9:16")
-    ),
-  },
-  handler: async (ctx, args) => {
-    const character = await ctx.db.get(args.id)
-    if (
-      !character ||
-      character.userId !== args.userId ||
-      character.status !== "ready"
-    ) {
-      throw new Error("Character not found")
-    }
-    await ctx.db.patch(args.id, {
-      creationImages: [
-        ...(character.creationImages ?? []),
-        {
-          key: args.imageKey,
-          prompt: args.prompt,
-          model: args.model,
-          aspectRatio: args.aspectRatio,
-          createdAt: Date.now(),
-        },
-      ],
-      updatedAt: Date.now(),
-    })
-  },
-})
-
 export const internalFailGeneration = internalMutation({
   args: {
     id: v.id("characters"),
@@ -432,6 +405,28 @@ export const internalFailGeneration = internalMutation({
     await ctx.db.patch(args.id, {
       generationStage: undefined,
       generationError: args.error.slice(0, 1000),
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+export const internalGenerationFinished = internalMutation({
+  args: vOnCompleteArgs(
+    v.object({
+      characterId: v.id("characters"),
+      stage: generationStageValidator,
+    })
+  ),
+  handler: async (ctx, args) => {
+    if (args.result.kind === "success") return
+    const character = await ctx.db.get(args.context.characterId)
+    if (!character || character.generationStage !== args.context.stage) return
+    await ctx.db.patch(args.context.characterId, {
+      generationStage: undefined,
+      generationError:
+        args.result.kind === "failed"
+          ? args.result.error.slice(0, 1000)
+          : "Generation was interrupted. Try again.",
       updatedAt: Date.now(),
     })
   },

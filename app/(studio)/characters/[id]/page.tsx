@@ -38,6 +38,10 @@ export default function CharacterDetailPage() {
   const router = useRouter()
   const character = useQuery(api.characters.getById, { id })
   const videos = useQuery(api.videos.listForCharacter, { characterId: id })
+  const images = useQuery(
+    api.images.listRecentForCharacter,
+    character ? { characterId: character._id } : "skip"
+  )
   const removeCharacter = useMutation(api.characters.remove)
 
   const identityImages = useMemo(() => {
@@ -64,7 +68,7 @@ export default function CharacterDetailPage() {
   }, [character])
 
   const recentCreations = useMemo(() => {
-    const photos = (character?.creationImages ?? []).map((photo) => ({
+    const photos = (images ?? []).map((photo) => ({
       kind: "photo" as const,
       ...photo,
     }))
@@ -75,9 +79,13 @@ export default function CharacterDetailPage() {
     return [...photos, ...videoItems]
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, 8)
-  }, [character, videos])
+  }, [images, videos])
 
-  if (character === undefined || videos === undefined) {
+  if (
+    character === undefined ||
+    videos === undefined ||
+    (character !== null && images === undefined)
+  ) {
     return (
       <div className="grid min-h-screen place-items-center text-muted-foreground">
         <IconLoader2 className="size-6 animate-spin" />
@@ -104,7 +112,7 @@ export default function CharacterDetailPage() {
     )
   }
 
-  const photoCount = character.creationImages.length
+  const photoCount = character.imageCount
   const totalCreationCount = photoCount + character.videoCount
   const description =
     character.sourcePrompt ??

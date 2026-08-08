@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { useAction, useMutation, useQuery } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 import {
+  IconAlertCircle,
   IconArrowLeft,
   IconArrowRight,
   IconBolt,
@@ -29,6 +30,13 @@ import { track } from "@/lib/posthog"
 import { cn } from "@/lib/utils"
 
 type SourceKind = "prompt" | "image"
+type WorkingStage = "hero" | "references"
+type CompletingCharacter = {
+  id: Id<"characters">
+  name: string
+  sourceKind?: SourceKind
+  retry: boolean
+}
 type SourceImage = {
   file: File
   previewUrl: string
@@ -56,11 +64,9 @@ export default function CharactersPage() {
   const draft = useQuery(api.characters.getDraft)
   const createDraft = useMutation(api.characters.createDraft)
   const approveHero = useMutation(api.characters.approveHero)
+  const queueHero = useMutation(api.characters.queueHero)
+  const queueReferencePack = useMutation(api.characters.queueReferencePack)
   const discardDraft = useMutation(api.characters.discardDraft)
-  const generateHero = useAction(api.characterGeneration.generateHero)
-  const generateReferencePack = useAction(
-    api.characterGeneration.generateReferencePack
-  )
   const uploadAsset = useAssetUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceImagesRef = useRef<SourceImage[]>([])
@@ -75,7 +81,9 @@ export default function CharactersPage() {
   const [sourceImages, setSourceImages] = useState<SourceImage[]>([])
   const [selectedHeroKey, setSelectedHeroKey] = useState("")
   const [adjustment, setAdjustment] = useState("")
-  const [working, setWorking] = useState(false)
+  const [workingStage, setWorkingStage] = useState<WorkingStage | null>(null)
+  const completingCharacterRef = useRef<CompletingCharacter | null>(null)
+  const working = workingStage !== null
 
   const showBuilder =
     builderOpen || Boolean(draft && draft._id !== dismissedDraftId)
@@ -102,6 +110,26 @@ export default function CharactersPage() {
     },
     []
   )
+
+  useEffect(() => {
+    const completingCharacter = completingCharacterRef.current
+    if (
+      !completingCharacter ||
+      !characters?.some(
+        (character) => character._id === completingCharacter.id
+      )
+    ) {
+      return
+    }
+    track("character_created", {
+      source_kind: completingCharacter.sourceKind,
+      retry: completingCharacter.retry,
+    })
+    toast.success(`${completingCharacter.name} is ready`, {
+      description: "Seedream created a two-image Kling-ready identity lock.",
+    })
+    completingCharacterRef.current = null
+  }, [characters])
 
   function replaceSourceImages(files: File[]) {
     sourceImagesRef.current.forEach(({ previewUrl }) =>
@@ -147,7 +175,7 @@ export default function CharactersPage() {
     if (!sourceKind || !name.trim() || working) return
     if (sourceKind === "prompt" && !description.trim()) return
     if (sourceKind === "image" && sourceImages.length === 0) return
-    setWorking(true)
+    setWorkingStage("hero")
     try {
       const groupId = crypto.randomUUID()
       const sourceImageKeys =
@@ -158,7 +186,7 @@ export default function CharactersPage() {
               )
             )
           : []
-      const characterId = await createDraft({
+      await createDraft({
         name: name.trim(),
         sourceKind,
         sourcePrompt: description.trim() || undefined,
@@ -170,8 +198,6 @@ export default function CharactersPage() {
         source_image_count: sourceImages.length,
         retry: false,
       })
-      const result = await generateHero({ characterId })
-      setSelectedHeroKey(result.imageKey)
     } catch (error) {
       track("generation_failed", {
         kind: "character_hero",
@@ -181,24 +207,23 @@ export default function CharactersPage() {
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
-      setWorking(false)
+      setWorkingStage(null)
     }
   }
 
   async function retryHero(characterId: Id<"characters">) {
     if (working) return
-    setWorking(true)
+    setWorkingStage("hero")
     try {
       track("generation_requested", {
         kind: "character_hero",
         retry: true,
         has_adjustment: Boolean(adjustment.trim()),
       })
-      const result = await generateHero({
-        characterId,
+      await queueHero({
+        id: characterId,
         adjustment: adjustment.trim() || undefined,
       })
-      setSelectedHeroKey(result.imageKey)
       setAdjustment("")
     } catch (error) {
       track("generation_failed", {
@@ -209,27 +234,26 @@ export default function CharactersPage() {
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
-      setWorking(false)
+      setWorkingStage(null)
     }
   }
 
   async function approveAndBuildReferences() {
     if (!draft || !effectiveSelectedHeroKey || working) return
-    setWorking(true)
+    setWorkingStage("references")
     try {
       await approveHero({ id: draft._id, imageKey: effectiveSelectedHeroKey })
       track("generation_requested", {
         kind: "character_reference_pack",
         retry: false,
       })
-      await generateReferencePack({ characterId: draft._id })
-      track("character_created", { source_kind: draft.sourceKind })
+      completingCharacterRef.current = {
+        id: draft._id,
+        name: draft.name,
+        sourceKind: draft.sourceKind,
+        retry: false,
+      }
       setBuilderOpen(false)
-      setDismissedDraftId(null)
-      resetLocalBuilder()
-      toast.success(`${draft.name} is ready`, {
-        description: "Seedream created a two-image Kling-ready identity lock.",
-      })
     } catch (error) {
       track("generation_failed", {
         kind: "character_reference_pack",
@@ -239,29 +263,26 @@ export default function CharactersPage() {
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
-      setWorking(false)
+      setWorkingStage(null)
     }
   }
 
   async function retryReferencePack() {
     if (!draft || working) return
-    setWorking(true)
+    setWorkingStage("references")
     try {
       track("generation_requested", {
         kind: "character_reference_pack",
         retry: true,
       })
-      await generateReferencePack({ characterId: draft._id })
-      track("character_created", {
-        source_kind: draft.sourceKind,
+      await queueReferencePack({ id: draft._id })
+      completingCharacterRef.current = {
+        id: draft._id,
+        name: draft.name,
+        sourceKind: draft.sourceKind,
         retry: true,
-      })
+      }
       setBuilderOpen(false)
-      setDismissedDraftId(null)
-      resetLocalBuilder()
-      toast.success(`${draft.name} is ready`, {
-        description: "Seedream created a two-image Kling-ready identity lock.",
-      })
     } catch (error) {
       track("generation_failed", {
         kind: "character_reference_pack",
@@ -271,7 +292,7 @@ export default function CharactersPage() {
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
-      setWorking(false)
+      setWorkingStage(null)
     }
   }
 
@@ -280,13 +301,20 @@ export default function CharactersPage() {
       await discardDraft({ id: draft._id })
     }
     resetLocalBuilder()
+    completingCharacterRef.current = null
     setDismissedDraftId(null)
     setBuilderOpen(true)
   }
 
   const heroSelected = Boolean(draft?.primaryImageKey)
+  const generatingHero =
+    workingStage === "hero" || draft?.generationStage === "hero"
+  const buildingReferences =
+    workingStage === "references" || draft?.generationStage === "references"
+  const referenceGenerationFailed =
+    heroSelected && Boolean(draft?.generationError) && !buildingReferences
   const activeStep =
-    heroSelected || draft?.generationStage === "references"
+    heroSelected || buildingReferences
       ? 3
       : heroCandidates.length || draft?.generationStage === "hero"
         ? 2
@@ -294,6 +322,14 @@ export default function CharactersPage() {
   const selectedHero = heroCandidates.find(
     (candidate) => candidate.key === effectiveSelectedHeroKey
   )
+  const showHeaderAction =
+    !showBuilder && (Boolean(draft) || Boolean(characters?.length))
+
+  function openBuilder() {
+    if (!draft) resetLocalBuilder()
+    setDismissedDraftId(null)
+    setBuilderOpen(true)
+  }
 
   return (
     <div className="min-h-screen">
@@ -301,17 +337,32 @@ export default function CharactersPage() {
         title="Characters"
         description="Build reusable, Kling-ready identities with Seedream-generated portrait and full-body references."
         action={
-          !showBuilder && (Boolean(draft) || Boolean(characters?.length)) ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                if (!draft) resetLocalBuilder()
-                setDismissedDraftId(null)
-                setBuilderOpen(true)
-              }}
-            >
-              {draft ? <IconArrowRight className="size-4" /> : <IconPlus className="size-4" />}
+          showHeaderAction ? (
+            <Button size="sm" onClick={openBuilder}>
+              {draft ? (
+                <IconArrowRight className="size-4" />
+              ) : (
+                <IconPlus className="size-4" />
+              )}
               {draft ? "Continue draft" : "New character"}
+            </Button>
+          ) : undefined
+        }
+        mobileAction={
+          showHeaderAction ? (
+            <Button
+              size="icon"
+              className="size-12 rounded-full shadow-lg shadow-black/20"
+              aria-label={
+                draft ? "Continue character draft" : "New character"
+              }
+              onClick={openBuilder}
+            >
+              {draft ? (
+                <IconArrowRight className="size-4" />
+              ) : (
+                <IconPlus className="size-4" />
+              )}
             </Button>
           ) : undefined
         }
@@ -413,7 +464,14 @@ export default function CharactersPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+                  <div
+                    className={cn(
+                      "mx-auto grid gap-8",
+                      sourceKind === "prompt"
+                        ? "max-w-3xl"
+                        : "max-w-5xl lg:grid-cols-[minmax(0,1fr)_360px]"
+                    )}
+                  >
                     <div>
                       <button
                         type="button"
@@ -424,14 +482,14 @@ export default function CharactersPage() {
                       </button>
                       <h3 className="text-2xl font-semibold tracking-tight">
                         {sourceKind === "prompt"
-                          ? "Describe the person"
+                          ? "Create from a prompt"
                           : "Choose clear references"}
                       </h3>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        {sourceKind === "prompt"
-                          ? "Focus on stable physical traits. Characters default to a fit, fashion-forward Instagram look unless you specify another body or style."
-                          : "Clear photos give Seedream the strongest identity signal. Add direction if you want a specific body, outfit, or level of modesty."}
-                      </p>
+                      {sourceKind === "image" ? (
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          Clear photos give Seedream the strongest identity signal. Add direction if you want a specific body, outfit, or level of modesty.
+                        </p>
+                      ) : null}
 
                       {sourceKind === "image" ? (
                         <div className="mt-6">
@@ -514,17 +572,51 @@ export default function CharactersPage() {
                           </button>
                         </div>
                       ) : (
-                        <Textarea
-                          value={description}
-                          onChange={(event) => setDescription(event.target.value)}
-                          placeholder="A woman in her late twenties with warm olive skin, shoulder-length dark curls, expressive brown eyes, a soft angular jaw, and an athletic build…"
-                          className="mt-6 min-h-72 resize-none p-5 text-base leading-7"
-                          maxLength={800}
-                        />
+                        <div className="mt-6 space-y-5">
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium">Character name</span>
+                            <Input
+                              value={name}
+                              onChange={(event) => setName(event.target.value)}
+                              placeholder="Maya"
+                              maxLength={48}
+                            />
+                          </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium">Prompt</span>
+                            <Textarea
+                              value={description}
+                              onChange={(event) => setDescription(event.target.value)}
+                              placeholder="A woman in her late twenties with warm olive skin, shoulder-length dark curls, expressive brown eyes, a soft angular jaw, and an athletic build…"
+                              className="min-h-56 resize-none p-5 text-base leading-7"
+                              maxLength={800}
+                            />
+                          </label>
+                          <Button
+                            size="lg"
+                            className="w-full"
+                            onClick={() => void startBuilder()}
+                            disabled={working || !name.trim() || !description.trim()}
+                          >
+                            {working ? (
+                              <IconLoader2 className="size-4 animate-spin" />
+                            ) : (
+                              <IconSparkles className="size-4" />
+                            )}
+                            {working ? "Generating hero…" : "Generate hero"}
+                            {!working ? (
+                              <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                                <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                                10
+                              </span>
+                            ) : null}
+                          </Button>
+                        </div>
                       )}
                     </div>
 
-                    <aside className="h-fit rounded-2xl border bg-muted/20 p-5">
+                    {sourceKind === "image" ? (
+                      <aside className="h-fit rounded-2xl border bg-muted/20 p-5">
                       <div className="space-y-5">
                         <label className="block space-y-2">
                           <span className="text-sm font-medium">Character name</span>
@@ -535,23 +627,18 @@ export default function CharactersPage() {
                             maxLength={48}
                           />
                         </label>
-                        {sourceKind === "image" ? (
-                          <label className="block space-y-2">
-                            <span className="text-sm font-medium">
-                              Direction <span className="font-normal text-muted-foreground">(optional)</span>
-                            </span>
-                            <Textarea
-                              value={description}
-                              onChange={(event) => setDescription(event.target.value)}
-                              placeholder="Keep the curls and freckles; use an athletic build and a fitted black evening look…"
-                              className="min-h-28 resize-none"
-                              maxLength={500}
-                            />
-                          </label>
-                        ) : null}
-                        <div className="rounded-xl border bg-background p-4 text-xs leading-5 text-muted-foreground">
-                          Seedream first creates one clean, front-facing hero. Nothing is saved as a finished character until you approve it.
-                        </div>
+                        <label className="block space-y-2">
+                          <span className="text-sm font-medium">
+                            Direction <span className="font-normal text-muted-foreground">(optional)</span>
+                          </span>
+                          <Textarea
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
+                            placeholder="Keep the curls and freckles; use an athletic build and a fitted black evening look…"
+                            className="min-h-28 resize-none"
+                            maxLength={500}
+                          />
+                        </label>
                         <Button
                           size="lg"
                           className="w-full"
@@ -559,9 +646,7 @@ export default function CharactersPage() {
                           disabled={
                             working ||
                             !name.trim() ||
-                            (sourceKind === "prompt"
-                              ? !description.trim()
-                              : sourceImages.length === 0)
+                            sourceImages.length === 0
                           }
                         >
                           {working ? (
@@ -578,17 +663,22 @@ export default function CharactersPage() {
                           ) : null}
                         </Button>
                       </div>
-                    </aside>
+                      </aside>
+                    ) : null}
                   </div>
                 )}
               </div>
-            ) : heroSelected ? (
+            ) : heroSelected || buildingReferences ? (
               <div className="grid min-h-[560px] gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
                 <div className="grid grid-cols-2 gap-3 rounded-2xl bg-muted/25 p-4">
                   <div className="relative overflow-hidden rounded-xl bg-muted">
-                    {draft.primaryImageUrl ? (
+                    {draft.primaryImageUrl || selectedHero?.url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={draft.primaryImageUrl} alt="Approved hero" className="size-full object-cover" />
+                      <img
+                        src={draft.primaryImageUrl ?? selectedHero?.url ?? undefined}
+                        alt="Approved hero"
+                        className="size-full object-cover"
+                      />
                     ) : null}
                     <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur">
                       Frontal hero
@@ -596,8 +686,16 @@ export default function CharactersPage() {
                   </div>
                   <div className="relative grid min-h-96 place-items-center overflow-hidden rounded-xl border border-dashed bg-background/60">
                     <div className="text-center text-muted-foreground">
-                      <IconLoader2 className="mx-auto size-5 animate-spin" />
-                      <p className="mt-2 text-xs">Generating full body</p>
+                      {referenceGenerationFailed ? (
+                        <IconAlertCircle className="mx-auto size-5 text-destructive" />
+                      ) : (
+                        <IconLoader2 className="mx-auto size-5 animate-spin" />
+                      )}
+                      <p className="mt-2 text-xs">
+                        {referenceGenerationFailed
+                          ? "Full body wasn’t created"
+                          : "Generating full body"}
+                      </p>
                     </div>
                     <span className="absolute bottom-2 left-2 rounded-full bg-background/85 px-2 py-1 text-[10px] font-medium backdrop-blur">
                       Full body
@@ -605,14 +703,25 @@ export default function CharactersPage() {
                   </div>
                 </div>
                 <aside className="flex flex-col justify-center rounded-2xl border bg-muted/20 p-6">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-                    Final step
+                  <span
+                    className={cn(
+                      "text-xs font-semibold uppercase tracking-[0.18em]",
+                      referenceGenerationFailed ? "text-destructive" : "text-primary"
+                    )}
+                  >
+                    {referenceGenerationFailed ? "Needs attention" : "Final step"}
                   </span>
-                  <h3 className="mt-3 text-2xl font-semibold">Building the identity pack</h3>
+                  <h3 className="mt-3 text-2xl font-semibold">
+                    {referenceGenerationFailed
+                      ? "The full body needs another try"
+                      : "Building the identity pack"}
+                  </h3>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    The approved face is locked. Seedream is deriving one polished full-body reference for Kling.
+                    {referenceGenerationFailed
+                      ? "Your approved hero is safe. Retry to finish the identity pack without starting over."
+                      : "The approved face is locked. Seedream is deriving one polished full-body reference for Kling."}
                   </p>
-                  {draft.generationError ? (
+                  {referenceGenerationFailed ? (
                     <div className="mt-5 space-y-3">
                       <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
                         {draft.generationError}
@@ -621,20 +730,28 @@ export default function CharactersPage() {
                         variant="outline"
                         className="w-full"
                         onClick={() => void retryReferencePack()}
-                        disabled={working || Boolean(draft.generationStage)}
+                        disabled={buildingReferences}
                       >
-                        {working ? <IconLoader2 className="size-4 animate-spin" /> : <IconRefresh className="size-4" />}
+                        <IconRefresh className="size-4" />
                         Retry full body
                       </Button>
                     </div>
                   ) : null}
-                  <div className="mt-6 space-y-3 text-xs text-muted-foreground">
-                    {["Facial geometry locked", "Lighting normalized", "Body proportions established"].map((item, index) => (
-                      <div key={item} className="flex items-center gap-2">
-                        {index === 0 ? <IconCheck className="size-4 text-primary" /> : <IconLoader2 className="size-4 animate-spin" />}
-                        {item}
-                      </div>
-                    ))}
+                  <div className="mt-6 space-y-3 text-xs text-muted-foreground" aria-live="polite">
+                    <div className="flex items-center gap-2">
+                      <IconCheck className="size-4 text-primary" />
+                      Hero approved and locked
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {referenceGenerationFailed ? (
+                        <IconAlertCircle className="size-4 text-destructive" />
+                      ) : (
+                        <IconLoader2 className="size-4 animate-spin" />
+                      )}
+                      {referenceGenerationFailed
+                        ? "Full-body generation interrupted"
+                        : "Creating the full-body reference"}
+                    </div>
                   </div>
                 </aside>
               </div>
@@ -652,6 +769,9 @@ export default function CharactersPage() {
                     <div className="text-center text-muted-foreground">
                       <IconLoader2 className="mx-auto size-6 animate-spin" />
                       <p className="mt-3 text-sm">Seedream is creating the hero…</p>
+                      <p className="mt-1 text-xs">
+                        Draft saved. You can leave and return anytime.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -705,13 +825,13 @@ export default function CharactersPage() {
                       onClick={() => void retryHero(draft._id)}
                       disabled={working || Boolean(draft.generationStage)}
                     >
-                      {working || draft.generationStage === "hero" ? (
+                      {generatingHero ? (
                         <IconLoader2 className="size-4 animate-spin" />
                       ) : (
                         <IconRefresh className="size-4" />
                       )}
                       {heroCandidates.length ? "Try another" : "Generate hero"}
-                      {!(working || draft.generationStage === "hero") ? (
+                      {!generatingHero ? (
                         <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
                           <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
                           10
@@ -724,14 +844,12 @@ export default function CharactersPage() {
                       onClick={() => void approveAndBuildReferences()}
                       disabled={!effectiveSelectedHeroKey || working || Boolean(draft.generationStage)}
                     >
-                      {working ? <IconLoader2 className="size-4 animate-spin" /> : <IconCheck className="size-4" />}
-                      {working ? "Building full body…" : "Approve & build full body"}
-                      {!working ? (
-                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
-                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
-                          10
-                        </span>
-                      ) : null}
+                      <IconCheck className="size-4" />
+                      Approve & build full body
+                      <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                        <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                        10
+                      </span>
                     </Button>
                     <button
                       type="button"

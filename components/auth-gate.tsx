@@ -19,7 +19,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (isPending || !session) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
-        <ShimmerText className="text-sm font-medium">
+        <ShimmerText className="text-base font-medium">
           Opening your studio
         </ShimmerText>
       </div>

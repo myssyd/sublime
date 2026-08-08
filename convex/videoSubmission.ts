@@ -7,6 +7,8 @@ import { action, type ActionCtx } from "./_generated/server"
 import { authComponent } from "./auth"
 import { r2 } from "./assets"
 import { parseInstagramReelUrl } from "./lib/instagram"
+import { characterImageSourceValidator } from "./lib/image"
+import { videoModelValidator } from "./lib/videoModel"
 import {
   detectVideoFormat,
   MAX_VIDEO_BYTES,
@@ -151,13 +153,14 @@ async function validateInstagramSource(
 export const createAndQueue = action({
   args: {
     characterId: v.id("characters"),
-    characterImageKey: v.string(),
+    characterImage: characterImageSourceValidator,
     sourceVideoKey: v.string(),
     sourceFileName: v.string(),
     sourceKind: v.union(v.literal("upload"), v.literal("instagram")),
     sourceUrl: v.optional(v.string()),
     prompt: v.string(),
     keepAudio: v.boolean(),
+    model: videoModelValidator,
   },
   handler: async (ctx, args): Promise<Id<"videos">> => {
     const user = await authComponent.getAuthUser(ctx)
@@ -176,13 +179,19 @@ export const createAndQueue = action({
     ) {
       throw new Error("Character not found")
     }
-    const allowedCharacterImageKeys = new Set([
-      character.primaryImageKey,
-      ...character.referenceImageKeys,
-      ...(character.creationImages ?? []).map((image) => image.key),
-      ...(character.creationImageKeys ?? []),
-    ])
-    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+    const imageIsOwned =
+      args.characterImage.kind === "identity"
+        ? [character.primaryImageKey, ...character.referenceImageKeys].includes(
+            args.characterImage.key
+          )
+        : Boolean(
+            await ctx.runQuery(internal.images.internalGetOwned, {
+              id: args.characterImage.imageId,
+              userId: user._id,
+              characterId: args.characterId,
+            })
+          )
+    if (!imageIsOwned) {
       throw new Error("Selected character image not found")
     }
 
@@ -204,10 +213,11 @@ export const createAndQueue = action({
       return await ctx.runMutation(internal.videos.internalCreateAndQueue, {
         userId: user._id,
         characterId: args.characterId,
-        characterImageKey: args.characterImageKey,
+        characterImage: args.characterImage,
         ...source,
         prompt,
         keepAudio: args.keepAudio,
+        model: args.model,
       })
     } catch (error) {
       if (source.sourceKind === "upload") {

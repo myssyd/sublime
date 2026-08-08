@@ -5,11 +5,17 @@ import { v } from "convex/values"
 import { authComponent } from "./auth"
 import { r2 } from "./assets"
 import { internal } from "./_generated/api"
-import { action, type ActionCtx } from "./_generated/server"
+import { action, internalAction, type ActionCtx } from "./_generated/server"
 import {
   CHARACTER_IMAGE_CREDITS,
   imageCreditsForModel,
 } from "./billing"
+import {
+  pictureAspectRatioValidator,
+  pictureModelValidator,
+  type PictureAspectRatio,
+  type PictureModel,
+} from "./lib/image"
 
 const SEEDREAM_TEXT_MODEL = "bytedance/seedream/v5/pro/text-to-image"
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit"
@@ -25,21 +31,8 @@ const ALLOWED_IMAGE_TYPES = new Set([
 const PICTURE_REFERENCE_PATH =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/references\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-type ImageModel = "seedream-5" | "nano-banana"
-type ImageAspectRatio =
-  | "21:9"
-  | "16:9"
-  | "3:2"
-  | "4:3"
-  | "5:4"
-  | "1:1"
-  | "4:5"
-  | "3:4"
-  | "2:3"
-  | "9:16"
-
 const IMAGE_SIZES: Record<
-  ImageAspectRatio,
+  PictureAspectRatio,
   { width: number; height: number }
 > = {
   "21:9": { width: 2016, height: 864 },
@@ -82,8 +75,8 @@ function isOwnedPictureReferenceKey(userId: string, key: string) {
 async function generateImage(args: {
   prompt: string
   referenceUrls?: string[]
-  model?: ImageModel
-  aspectRatio?: ImageAspectRatio
+  model?: PictureModel
+  aspectRatio?: PictureAspectRatio
 }) {
   const imageModel = args.model ?? "seedream-5"
   const aspectRatio = args.aspectRatio ?? "4:5"
@@ -133,8 +126,8 @@ async function generateBilledImage(
     refId: string
     prompt: string
     referenceUrls?: string[]
-    model?: ImageModel
-    aspectRatio?: ImageAspectRatio
+    model?: PictureModel
+    aspectRatio?: PictureAspectRatio
   }
 ) {
   await ctx.runMutation(internal.credits.createReservation, {
@@ -229,27 +222,26 @@ async function storeGeneratedImage(
   })
 }
 
-export const generateHero = action({
+export const generateHeroJob = internalAction({
   args: {
     characterId: v.id("characters"),
+    userId: v.string(),
     adjustment: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ imageKey: string }> => {
-    const user = await authComponent.getAuthUser(ctx)
-    if (!user) throw new Error("Not authenticated")
     const character = await ctx.runQuery(internal.characters.internalGetOwned, {
       id: args.characterId,
-      userId: user._id,
+      userId: args.userId,
     })
-    if (!character || character.status !== "draft" || !character.sourceKind) {
+    if (
+      !character ||
+      character.status !== "draft" ||
+      !character.sourceKind ||
+      character.generationStage !== "hero"
+    ) {
       throw new Error("Character draft not found")
     }
     configureFal()
-    await ctx.runMutation(internal.characters.internalBeginGeneration, {
-      id: args.characterId,
-      userId: user._id,
-      stage: "hero",
-    })
     try {
       const referenceUrls = await Promise.all(
         (character.sourceImageKeys ?? []).map((key) =>
@@ -257,7 +249,7 @@ export const generateHero = action({
         )
       )
       const generated = await generateBilledImage(ctx, {
-        userId: user._id,
+        userId: args.userId,
         reservationKey: `character-hero:${args.characterId}:${crypto.randomUUID()}`,
         credits: CHARACTER_IMAGE_CREDITS,
         kind: "character_hero",
@@ -272,18 +264,18 @@ export const generateHero = action({
       const imageKey = await storeGeneratedImage(
         ctx,
         generated.blob,
-        `users/${user._id}/characters/${args.characterId}/heroes/${crypto.randomUUID()}.jpg`
+        `users/${args.userId}/characters/${args.characterId}/heroes/${crypto.randomUUID()}.jpg`
       )
       await ctx.runMutation(internal.characters.internalCompleteHero, {
         id: args.characterId,
-        userId: user._id,
+        userId: args.userId,
         imageKey,
       })
       return { imageKey }
     } catch (error) {
       await ctx.runMutation(internal.characters.internalFailGeneration, {
         id: args.characterId,
-        userId: user._id,
+        userId: args.userId,
         error: errorMessage(error),
       })
       throw error
@@ -291,30 +283,31 @@ export const generateHero = action({
   },
 })
 
-export const generateReferencePack = action({
-  args: { characterId: v.id("characters") },
+export const generateReferencePackJob = internalAction({
+  args: {
+    characterId: v.id("characters"),
+    userId: v.string(),
+  },
   handler: async (ctx, args): Promise<{ referenceImageKeys: string[] }> => {
-    const user = await authComponent.getAuthUser(ctx)
-    if (!user) throw new Error("Not authenticated")
     const character = await ctx.runQuery(internal.characters.internalGetOwned, {
       id: args.characterId,
-      userId: user._id,
+      userId: args.userId,
     })
-    if (!character || character.status !== "draft" || !character.primaryImageKey) {
+    if (
+      !character ||
+      character.status !== "draft" ||
+      !character.primaryImageKey ||
+      character.generationStage !== "references"
+    ) {
       throw new Error("Approve a hero first")
     }
     configureFal()
-    await ctx.runMutation(internal.characters.internalBeginGeneration, {
-      id: args.characterId,
-      userId: user._id,
-      stage: "references",
-    })
     try {
       const heroUrl = await r2.getUrl(character.primaryImageKey, {
         expiresIn: 60 * 60,
       })
       const generated = await generateBilledImage(ctx, {
-        userId: user._id,
+        userId: args.userId,
         reservationKey: `character-reference:${args.characterId}:full-body:${crypto.randomUUID()}`,
         credits: CHARACTER_IMAGE_CREDITS,
         kind: "character_reference",
@@ -325,19 +318,19 @@ export const generateReferencePack = action({
       const fullBodyImageKey = await storeGeneratedImage(
         ctx,
         generated.blob,
-        `users/${user._id}/characters/${args.characterId}/references/full-body-${crypto.randomUUID()}.jpg`
+        `users/${args.userId}/characters/${args.characterId}/references/full-body-${crypto.randomUUID()}.jpg`
       )
       const referenceImageKeys = [fullBodyImageKey]
       await ctx.runMutation(internal.characters.internalCompleteReferences, {
         id: args.characterId,
-        userId: user._id,
+        userId: args.userId,
         referenceImageKeys,
       })
       return { referenceImageKeys }
     } catch (error) {
       await ctx.runMutation(internal.characters.internalFailGeneration, {
         id: args.characterId,
-        userId: user._id,
+        userId: args.userId,
         error: errorMessage(error),
       })
       throw error
@@ -349,20 +342,9 @@ export const generateCreation = action({
   args: {
     characterId: v.id("characters"),
     prompt: v.string(),
-    model: v.union(v.literal("seedream-5"), v.literal("nano-banana")),
+    model: pictureModelValidator,
     attachmentImageKeys: v.array(v.string()),
-    aspectRatio: v.union(
-      v.literal("21:9"),
-      v.literal("16:9"),
-      v.literal("3:2"),
-      v.literal("4:3"),
-      v.literal("5:4"),
-      v.literal("1:1"),
-      v.literal("4:5"),
-      v.literal("3:4"),
-      v.literal("2:3"),
-      v.literal("9:16")
-    ),
+    aspectRatio: pictureAspectRatioValidator,
   },
   handler: async (ctx, args): Promise<{ imageKey: string }> => {
     const user = await authComponent.getAuthUser(ctx)
@@ -444,14 +426,19 @@ Make the result feel like a polished, believable Instagram post with natural pho
         generated.blob,
         `users/${user._id}/characters/${args.characterId}/creations/${crypto.randomUUID()}.jpg`
       )
-      await ctx.runMutation(internal.characters.internalAppendCreationImage, {
-        id: args.characterId,
-        userId: user._id,
-        imageKey,
-        prompt,
-        model: args.model,
-        aspectRatio: args.aspectRatio,
-      })
+      try {
+        await ctx.runMutation(internal.images.internalCreate, {
+          characterId: args.characterId,
+          userId: user._id,
+          key: imageKey,
+          prompt,
+          model: args.model,
+          aspectRatio: args.aspectRatio,
+        })
+      } catch (error) {
+        await r2.deleteObject(ctx, imageKey)
+        throw error
+      }
       return { imageKey }
     } finally {
       await Promise.allSettled(

@@ -7,6 +7,7 @@ import { internal } from "./_generated/api"
 import { action } from "./_generated/server"
 import { authComponent } from "./auth"
 import { r2 } from "./assets"
+import { characterImageSourceValidator } from "./lib/image"
 
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024
 const MIN_AUDIO_SECONDS = 2
@@ -46,7 +47,7 @@ function normalizedAudioFormat(container: string | undefined) {
 export const createAndQueue = action({
   args: {
     characterId: v.id("characters"),
-    characterImageKey: v.string(),
+    characterImage: characterImageSourceValidator,
     sourceAudioKey: v.string(),
     sourceFileName: v.string(),
   },
@@ -68,13 +69,19 @@ export const createAndQueue = action({
     ) {
       throw new Error("Character not found")
     }
-    const allowedCharacterImageKeys = new Set([
-      character.primaryImageKey,
-      ...character.referenceImageKeys,
-      ...(character.creationImages ?? []).map((image) => image.key),
-      ...(character.creationImageKeys ?? []),
-    ])
-    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+    const imageIsOwned =
+      args.characterImage.kind === "identity"
+        ? [character.primaryImageKey, ...character.referenceImageKeys].includes(
+            args.characterImage.key
+          )
+        : Boolean(
+            await ctx.runQuery(internal.images.internalGetOwned, {
+              id: args.characterImage.imageId,
+              userId: user._id,
+              characterId: args.characterId,
+            })
+          )
+    if (!imageIsOwned) {
       throw new Error("Selected character image not found")
     }
 
@@ -134,7 +141,7 @@ export const createAndQueue = action({
         {
           userId: user._id,
           characterId: args.characterId,
-          characterImageKey: args.characterImageKey,
+          characterImage: args.characterImage,
           sourceAudioKey: verifiedKey,
           sourceAudioContentType: format.contentType,
           sourceFileName: cleanFileName(args.sourceFileName),

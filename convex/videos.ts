@@ -1,5 +1,6 @@
 import { v } from "convex/values"
 import { paginationOptsValidator } from "convex/server"
+import type { Id } from "./_generated/dataModel"
 import { authComponent } from "./auth"
 import { publicAssetUrl } from "./assets"
 import { videoPool } from "./jobs"
@@ -10,10 +11,50 @@ import {
 } from "./billing"
 import { reserveCredits } from "./credits"
 import {
+  characterImageSourceValidator,
+  type CharacterImageSource,
+} from "./lib/image"
+import {
+  VIDEO_MODEL_MIN_SOURCE_SECONDS,
+  videoModelValidator,
+  type VideoModel,
+} from "./lib/videoModel"
+import {
   internalMutation,
   internalQuery,
   query,
+  type MutationCtx,
 } from "./_generated/server"
+
+function providerForVideoModel(model: VideoModel) {
+  if (model === "seedance-2.0-fast") return "fal-seedance-2.0-fast" as const
+  if (model === "seedance-2.5") return "fal-seedance-2.5" as const
+  return "fal-kling-o3-pro" as const
+}
+
+async function resolveCharacterImage(
+  ctx: MutationCtx,
+  args: {
+    userId: string
+    characterId: Id<"characters">
+    source: CharacterImageSource
+    primaryImageKey: string
+    referenceImageKeys: string[]
+  }
+): Promise<{ key: string; imageId?: Id<"images"> } | null> {
+  if (args.source.kind === "identity") {
+    return args.source.key === args.primaryImageKey ||
+      args.referenceImageKeys.includes(args.source.key)
+      ? { key: args.source.key }
+      : null
+  }
+  const image = await ctx.db.get(args.source.imageId)
+  return (
+    image?.userId === args.userId && image.characterId === args.characterId
+  )
+    ? { key: image.key, imageId: image._id }
+    : null
+}
 
 export const list = query({
   args: {},
@@ -135,7 +176,7 @@ export const internalCreateAndQueue = internalMutation({
   args: {
     userId: v.string(),
     characterId: v.id("characters"),
-    characterImageKey: v.string(),
+    characterImage: characterImageSourceValidator,
     sourceVideoKey: v.string(),
     sourceFileName: v.string(),
     sourceKind: v.union(v.literal("upload"), v.literal("instagram")),
@@ -144,6 +185,7 @@ export const internalCreateAndQueue = internalMutation({
     sourceFileSize: v.number(),
     prompt: v.string(),
     keepAudio: v.boolean(),
+    model: videoModelValidator,
   },
   handler: async (ctx, args) => {
     const character = await ctx.db.get(args.characterId)
@@ -155,20 +197,25 @@ export const internalCreateAndQueue = internalMutation({
     ) {
       throw new Error("Character not found")
     }
-    const allowedCharacterImageKeys = new Set([
-      character.primaryImageKey,
-      ...character.referenceImageKeys,
-      ...(character.creationImages ?? []).map((image) => image.key),
-      ...(character.creationImageKeys ?? []),
-    ])
-    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+    const characterImage = await resolveCharacterImage(ctx, {
+      userId: args.userId,
+      characterId: args.characterId,
+      source: args.characterImage,
+      primaryImageKey: character.primaryImageKey,
+      referenceImageKeys: character.referenceImageKeys,
+    })
+    if (!characterImage) {
       throw new Error("Selected character image not found")
     }
     if (
-      args.sourceDurationSeconds < 3 ||
+      args.sourceDurationSeconds < VIDEO_MODEL_MIN_SOURCE_SECONDS[args.model] ||
       args.sourceDurationSeconds > 10
     ) {
-      throw new Error("Reference videos must be between 3 and 10 seconds")
+      throw new Error(
+        args.model === "kling-o3-pro"
+          ? "Reference videos must be between 3 and 10 seconds"
+          : "Seedance reference videos must be between 4 and 10 seconds"
+      )
     }
     if (args.sourceFileSize > 200 * 1024 * 1024) {
       throw new Error("Reference videos must be smaller than 200 MB")
@@ -178,7 +225,8 @@ export const internalCreateAndQueue = internalMutation({
       userId: args.userId,
       characterId: args.characterId,
       videoKind: "reel_clone",
-      characterImageKey: args.characterImageKey,
+      characterImageKey: characterImage.key,
+      characterImageId: characterImage.imageId,
       sourceVideoKey: args.sourceVideoKey,
       sourceFileName: args.sourceFileName,
       sourceKind: args.sourceKind,
@@ -187,13 +235,21 @@ export const internalCreateAndQueue = internalMutation({
       sourceFileSize: args.sourceFileSize,
       prompt: args.prompt.trim(),
       keepAudio: args.keepAudio,
-      provider: "fal-kling-o3-pro",
+      model: args.model,
+      provider: providerForVideoModel(args.model),
       status: "queued",
       createdAt: now,
       updatedAt: now,
     })
+    await ctx.db.patch(args.characterId, {
+      videoCount: character.videoCount + 1,
+      updatedAt: now,
+    })
     const creditReservationKey = `video-clone:${videoId}`
-    const credits = videoCreditsForDuration(args.sourceDurationSeconds)
+    const credits = videoCreditsForDuration(
+      args.sourceDurationSeconds,
+      args.model
+    )
     await reserveCredits(ctx, {
       userId: args.userId,
       credits,
@@ -219,7 +275,7 @@ export const internalCreateLipSyncAndQueue = internalMutation({
   args: {
     userId: v.string(),
     characterId: v.id("characters"),
-    characterImageKey: v.string(),
+    characterImage: characterImageSourceValidator,
     sourceAudioKey: v.string(),
     sourceAudioContentType: v.string(),
     sourceFileName: v.string(),
@@ -236,13 +292,14 @@ export const internalCreateLipSyncAndQueue = internalMutation({
     ) {
       throw new Error("Character not found")
     }
-    const allowedCharacterImageKeys = new Set([
-      character.primaryImageKey,
-      ...character.referenceImageKeys,
-      ...(character.creationImages ?? []).map((image) => image.key),
-      ...(character.creationImageKeys ?? []),
-    ])
-    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+    const characterImage = await resolveCharacterImage(ctx, {
+      userId: args.userId,
+      characterId: args.characterId,
+      source: args.characterImage,
+      primaryImageKey: character.primaryImageKey,
+      referenceImageKeys: character.referenceImageKeys,
+    })
+    if (!characterImage) {
       throw new Error("Selected character image not found")
     }
     if (
@@ -260,7 +317,8 @@ export const internalCreateLipSyncAndQueue = internalMutation({
       userId: args.userId,
       characterId: args.characterId,
       videoKind: "lip_sync",
-      characterImageKey: args.characterImageKey,
+      characterImageKey: characterImage.key,
+      characterImageId: characterImage.imageId,
       sourceAudioKey: args.sourceAudioKey,
       sourceAudioContentType: args.sourceAudioContentType,
       sourceFileName: args.sourceFileName,
@@ -272,6 +330,10 @@ export const internalCreateLipSyncAndQueue = internalMutation({
       provider: "fal-sync-lipsync-v3",
       status: "queued",
       createdAt: now,
+      updatedAt: now,
+    })
+    await ctx.db.patch(args.characterId, {
+      videoCount: character.videoCount + 1,
       updatedAt: now,
     })
     const creditReservationKey = `lip-sync:${videoId}`
