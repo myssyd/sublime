@@ -16,6 +16,7 @@ import {
   IconSparkles,
   IconTextCaption,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -74,6 +75,7 @@ export function CharactersExperience({
   const uploadAsset = useAssetUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sourceImagesRef = useRef<SourceImage[]>([]);
+  const dialogClosedWithEscapeRef = useRef(false);
 
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [sourceKind, setSourceKind] = useState<SourceKind | null>(null);
@@ -153,6 +155,17 @@ export function CharactersExperience({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function removeSourceImage(index: number) {
+    const removed = sourceImagesRef.current[index];
+    if (!removed) return;
+    URL.revokeObjectURL(removed.previewUrl);
+    const nextImages = sourceImagesRef.current.filter(
+      (_, imageIndex) => imageIndex !== index,
+    );
+    sourceImagesRef.current = nextImages;
+    setSourceImages(nextImages);
+  }
+
   function resetLocalBuilder() {
     setSourceKind(null);
     setName("");
@@ -163,7 +176,7 @@ export function CharactersExperience({
   }
 
   function chooseFiles(list: FileList | null) {
-    const selected = Array.from(list ?? []).slice(0, MAX_SOURCE_IMAGES);
+    const selected = Array.from(list ?? []);
     if (!selected.length) return;
     const invalid = selected.find(
       (file) =>
@@ -173,7 +186,37 @@ export function CharactersExperience({
       toast.error("Use JPG, PNG, or WebP files smaller than 15 MB");
       return;
     }
-    replaceSourceImages(selected);
+    const existingFiles = new Set(
+      sourceImagesRef.current.map(
+        ({ file }) => `${file.name}:${file.size}:${file.lastModified}`,
+      ),
+    );
+    const uniqueFiles = selected.filter(
+      (file) =>
+        !existingFiles.has(`${file.name}:${file.size}:${file.lastModified}`),
+    );
+    const availableSlots = MAX_SOURCE_IMAGES - sourceImagesRef.current.length;
+    const additions = uniqueFiles.slice(0, availableSlots);
+    if (!additions.length) {
+      toast.message(
+        availableSlots === 0
+          ? "Remove a reference before adding another"
+          : "Those references are already selected",
+      );
+      return;
+    }
+    if (uniqueFiles.length > availableSlots) {
+      toast.message(`Using the first ${MAX_SOURCE_IMAGES} references`);
+    }
+    const nextImages = [
+      ...sourceImagesRef.current,
+      ...additions.map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })),
+    ];
+    sourceImagesRef.current = nextImages;
+    setSourceImages(nextImages);
   }
 
   async function startBuilder() {
@@ -381,12 +424,17 @@ export function CharactersExperience({
       >
         <Dialog
           open={builderOpen}
-          onOpenChange={(open) => {
+          onOpenChange={(open, eventDetails) => {
+            dialogClosedWithEscapeRef.current =
+              !open && eventDetails.reason === "escape-key";
             if (!open && draft) toast.message("Your character draft is saved");
             setBuilderOpen(open);
           }}
         >
-          <DialogContent className="h-[min(600px,calc(100dvh-2rem))] gap-0 overflow-hidden bg-card p-0 text-card-foreground sm:max-w-5xl">
+          <DialogContent
+            finalFocus={() => !dialogClosedWithEscapeRef.current}
+            className="h-[min(600px,calc(100dvh-2rem))] gap-0 overflow-hidden bg-card p-0 text-card-foreground sm:max-w-5xl"
+          >
             <section className="flex h-full min-h-0 flex-col overflow-hidden">
               <div className="shrink-0 border-b bg-card px-5 py-4 pr-12 sm:px-6 sm:pr-14">
                 <div>
@@ -484,14 +532,6 @@ export function CharactersExperience({
                               : "Choose clear references"}
                           </h3>
                           {sourceKind === "image" ? (
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                              Clear photos give Nano Banana 2 the strongest
-                              identity signal. Add direction if you want a
-                              specific body, outfit, or level of modesty.
-                            </p>
-                          ) : null}
-
-                          {sourceKind === "image" ? (
                             <div className="mt-5">
                               <input
                                 ref={fileInputRef}
@@ -504,34 +544,25 @@ export function CharactersExperience({
                                   event.currentTarget.value = "";
                                 }}
                               />
-                              <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
+                              <div
                                 onDragOver={(event) => event.preventDefault()}
                                 onDrop={(event) => {
                                   event.preventDefault();
                                   chooseFiles(event.dataTransfer.files);
                                 }}
                                 className={cn(
-                                  "flex min-h-60 w-full flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 text-center transition-colors hover:border-ring hover:bg-accent/25",
+                                  "min-h-60 w-full rounded-2xl border border-dashed bg-muted/20 text-center transition-colors",
                                   sourceImages.length
                                     ? "border-solid border-primary/40 p-3"
-                                    : "px-6",
+                                    : "hover:border-ring hover:bg-accent/25",
                                 )}
                               >
                                 {sourceImages.length ? (
                                   <>
-                                    <span
-                                      className={cn(
-                                        "grid w-full gap-2",
-                                        sourceImages.length === 1
-                                          ? "grid-cols-1"
-                                          : "grid-cols-2 sm:grid-cols-3",
-                                      )}
-                                    >
+                                    <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
                                       {sourceImages.map(
                                         ({ previewUrl }, index) => (
-                                          <span
+                                          <div
                                             key={previewUrl}
                                             className="relative overflow-hidden rounded-xl border bg-muted/50"
                                           >
@@ -539,30 +570,51 @@ export function CharactersExperience({
                                             <img
                                               src={previewUrl}
                                               alt={`Selected reference ${index + 1}`}
-                                              className={cn(
-                                                "w-full object-contain",
-                                                sourceImages.length === 1
-                                                  ? "h-56"
-                                                  : "aspect-square h-auto",
-                                              )}
+                                              className="aspect-square size-full object-cover"
                                             />
-                                          </span>
+                                            <button
+                                              type="button"
+                                              aria-label={`Remove reference ${index + 1}`}
+                                              title="Remove reference"
+                                              onClick={() =>
+                                                removeSourceImage(index)
+                                              }
+                                              className="absolute top-1.5 right-1.5 grid size-7 place-items-center rounded-full bg-black/65 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/85 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+                                            >
+                                              <IconX className="size-3.5" />
+                                            </button>
+                                          </div>
                                         ),
                                       )}
-                                    </span>
-                                    <span className="mt-3 text-sm font-semibold">
-                                      {sourceImages.length} photo
-                                      {sourceImages.length === 1
-                                        ? ""
-                                        : "s"}{" "}
-                                      selected
-                                    </span>
-                                    <span className="mt-1 text-xs text-muted-foreground">
-                                      Click or drop to replace
-                                    </span>
+                                      {sourceImages.length <
+                                      MAX_SOURCE_IMAGES ? (
+                                        <button
+                                          type="button"
+                                          aria-label="Add more reference photos"
+                                          onClick={() =>
+                                            fileInputRef.current?.click()
+                                          }
+                                          className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed text-muted-foreground transition-colors hover:border-ring hover:bg-accent/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                          <IconPlus className="size-5" />
+                                          <span className="mt-2 text-xs font-medium">
+                                            Add photos
+                                          </span>
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-3 text-xs text-muted-foreground">
+                                      Drop more here or remove individual references
+                                    </p>
                                   </>
                                 ) : (
-                                  <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      fileInputRef.current?.click()
+                                    }
+                                    className="flex min-h-60 w-full flex-col items-center justify-center px-6 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                  >
                                     <span className="grid size-12 place-items-center rounded-xl border bg-background shadow-sm">
                                       <IconPhotoUp className="size-5" />
                                     </span>
@@ -573,9 +625,9 @@ export function CharactersExperience({
                                       JPG, PNG, or WebP · up to six images and
                                       15 MB each
                                     </span>
-                                  </>
+                                  </button>
                                 )}
-                              </button>
+                              </div>
                             </div>
                           ) : (
                             <div className="mt-5 space-y-4">
