@@ -10,6 +10,7 @@ export type AssetKind =
   | "character-reference"
   | "picture-reference"
   | "video-source"
+  | "audio-source"
 
 export function useAssetUpload() {
   const generateUploadUrl = useMutation(api.assets.generateUploadUrl)

@@ -7,12 +7,20 @@ import { internal } from "./_generated/api"
 import { internalAction } from "./_generated/server"
 
 const KLING_CLONE_MODEL = "fal-ai/kling-video/o3/pro/video-to-video/edit"
+const LIP_SYNC_MODEL = "fal-ai/sync-lipsync/v3/image-to-video"
 
 type KlingResult = {
   requestId?: string
   data?: {
     video?: { url?: string }
     videos?: Array<{ url?: string }>
+  }
+}
+
+type LipSyncResult = {
+  requestId?: string
+  data?: {
+    video?: { url?: string }
   }
 }
 
@@ -43,6 +51,9 @@ export const generateClone = internalAction({
       if (!reservationKey) throw new Error("Video credit reservation is missing")
       if (!character.primaryImageKey) {
         throw new Error("Character has no approved hero image")
+      }
+      if (!video.sourceVideoKey) {
+        throw new Error("Clone source video is missing")
       }
       const selectedLookImageKey =
         video.characterImageKey ?? character.primaryImageKey
@@ -149,6 +160,107 @@ export const generateClone = internalAction({
           reservationKey,
           operation: "video_clone",
           model: KLING_CLONE_MODEL,
+          elapsedMs: Date.now() - startedAt,
+          reason: message,
+        })
+      }
+      await ctx.runMutation(internal.videos.internalFail, {
+        videoId: args.videoId,
+        error: message,
+        elapsedMs: Date.now() - startedAt,
+      })
+      throw error
+    }
+  },
+})
+
+export const generateLipSync = internalAction({
+  args: { videoId: v.id("videos") },
+  handler: async (ctx, args) => {
+    const startedAt = Date.now()
+    let providerSucceeded = false
+    let reservationKey: string | undefined
+    await ctx.runMutation(internal.videos.internalSetProcessing, {
+      videoId: args.videoId,
+    })
+
+    try {
+      const apiKey = process.env.FAL_KEY
+      if (!apiKey) throw new Error("FAL_KEY is not configured")
+      fal.config({ credentials: apiKey })
+
+      const { video, character } = await ctx.runQuery(
+        internal.videos.internalGetGenerationContext,
+        { videoId: args.videoId }
+      )
+      reservationKey = video.creditReservationKey
+      if (!reservationKey) {
+        throw new Error("Lip-sync credit reservation is missing")
+      }
+      if (!video.sourceAudioKey) {
+        throw new Error("Lip-sync source audio is missing")
+      }
+      const characterImageKey =
+        video.characterImageKey ?? character.primaryImageKey
+      if (!characterImageKey) {
+        throw new Error("Character image is missing")
+      }
+
+      const [imageUrl, audioUrl] = await Promise.all([
+        r2.getUrl(characterImageKey, { expiresIn: 60 * 60 }),
+        r2.getUrl(video.sourceAudioKey, { expiresIn: 60 * 60 }),
+      ])
+      const result = (await fal.subscribe(LIP_SYNC_MODEL, {
+        input: {
+          image_url: imageUrl,
+          audio_url: audioUrl,
+        },
+        logs: true,
+      })) as LipSyncResult
+      const outputUrl = result.data?.video?.url ?? null
+      if (!outputUrl) throw new Error("Sync returned no output video")
+
+      await ctx.runMutation(internal.credits.recordProviderSuccess, {
+        reservationKey,
+        operation: "lip_sync",
+        model: LIP_SYNC_MODEL,
+        providerRequestId: result.requestId,
+        elapsedMs: Date.now() - startedAt,
+      })
+      providerSucceeded = true
+      await ctx.runMutation(internal.videos.internalMarkProviderSuccess, {
+        videoId: args.videoId,
+        providerRequestId: result.requestId,
+        providerOutputUrl: outputUrl,
+      })
+
+      const response = await fetch(outputUrl)
+      if (!response.ok) {
+        throw new Error(`Could not download lip-sync output (${response.status})`)
+      }
+      const blob = await response.blob()
+      const sourceDirectory = video.sourceAudioKey.match(
+        /^(users\/[^/]+\/videos\/[^/]+)\/audio\//
+      )?.[1]
+      const outputVideoKey = await r2.store(ctx, blob, {
+        key: `${sourceDirectory ?? `users/${video.userId}/videos/${args.videoId}`}/output/${crypto.randomUUID()}.mp4`,
+        type: blob.type || "video/mp4",
+        cacheControl: "public, max-age=31536000, immutable",
+      })
+
+      await ctx.runMutation(internal.videos.internalComplete, {
+        videoId: args.videoId,
+        outputVideoKey,
+        providerRequestId: result.requestId,
+        elapsedMs: Date.now() - startedAt,
+      })
+    } catch (error) {
+      const message = errorMessage(error).slice(0, 1500)
+      if (!providerSucceeded && reservationKey) {
+        await ctx.runMutation(internal.credits.recordProviderFailure, {
+          reservationKey,
+          operation: "lip_sync",
+          model: LIP_SYNC_MODEL,
           elapsedMs: Date.now() - startedAt,
           reason: message,
         })

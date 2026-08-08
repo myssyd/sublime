@@ -376,7 +376,7 @@ export default function LibraryPage() {
                         {item.characterName}
                       </p>
                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                        Kling O3 Pro · {formatDate(item.createdAt)}
+                        {item.videoKind === "lip_sync" ? "Lip Sync" : "Reel Clone"} · {formatDate(item.createdAt)}
                       </p>
                       {item.error ? (
                         <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-destructive">

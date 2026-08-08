@@ -16,6 +16,7 @@ import { NumberPopIn } from "@/components/number-pop-in"
 import { Button } from "@/components/ui/button"
 import { api } from "@/convex/_generated/api"
 import {
+  LIP_SYNC_CREDITS_PER_SECOND,
   PAID_PLAN_IDS,
   PLANS,
   TOPUP_AMOUNT,
@@ -301,7 +302,7 @@ function BillingContent() {
                         : `${monthlyCredits.toLocaleString()} credits per month`,
                       `Up to ${(creditBasis / 5).toLocaleString()} Nano Banana photos`,
                       `Up to ${Math.floor(creditBasis / 100).toLocaleString()} five-second Kling Pro videos`,
-                      "Credits work across photos, video, and characters",
+                      "Credits work across photos, Reel Clone, Lip Sync, and characters",
                       "Commercial use",
                     ].map((feature) => (
                       <li key={feature} className="flex items-start gap-2.5">
@@ -338,11 +339,12 @@ function BillingContent() {
 
         <section className="rounded-2xl border bg-muted/35 p-5 sm:p-6">
           <h2 className="font-semibold">How credits work</h2>
-          <div className="mt-4 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-5">
             <p><strong className="text-foreground">5 credits</strong><br />Nano Banana photo</p>
             <p><strong className="text-foreground">10 credits</strong><br />Seedream 5 Pro photo</p>
             <p><strong className="text-foreground">30 credits</strong><br />Complete character build</p>
             <p><strong className="text-foreground">20 credits/sec</strong><br />Kling O3 Pro video clone</p>
+            <p><strong className="text-foreground">{LIP_SYNC_CREDITS_PER_SECOND} credits/sec</strong><br />Sync 3 lip sync</p>
           </div>
         </section>
       </main>

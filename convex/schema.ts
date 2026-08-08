@@ -56,8 +56,13 @@ export default defineSchema({
   videos: defineTable({
     userId: v.string(),
     characterId: v.id("characters"),
+    videoKind: v.optional(
+      v.union(v.literal("reel_clone"), v.literal("lip_sync"))
+    ),
     characterImageKey: v.optional(v.string()),
-    sourceVideoKey: v.string(),
+    sourceVideoKey: v.optional(v.string()),
+    sourceAudioKey: v.optional(v.string()),
+    sourceAudioContentType: v.optional(v.string()),
     sourceFileName: v.string(),
     sourceKind: v.optional(
       v.union(v.literal("upload"), v.literal("instagram"))
@@ -67,7 +72,10 @@ export default defineSchema({
     sourceFileSize: v.optional(v.number()),
     prompt: v.string(),
     keepAudio: v.boolean(),
-    provider: v.literal("fal-kling-o3-pro"),
+    provider: v.union(
+      v.literal("fal-kling-o3-pro"),
+      v.literal("fal-sync-lipsync-v3")
+    ),
     status: v.union(
       v.literal("queued"),
       v.literal("processing"),
@@ -111,6 +119,7 @@ export default defineSchema({
     userId: v.string(),
     operation: v.union(
       v.literal("video_clone"),
+      v.literal("lip_sync"),
       v.literal("character_image")
     ),
     provider: v.literal("fal"),

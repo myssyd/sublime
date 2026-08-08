@@ -268,7 +268,9 @@ export default function CharacterDetailPage() {
                     <p className="truncate text-xs font-medium">
                       {item.kind === "photo"
                         ? item.prompt || "Generated photo"
-                        : item.prompt || "Video clone"}
+                        : item.videoKind === "lip_sync"
+                          ? "Lip sync"
+                          : item.prompt || "Reel clone"}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       {dateFormatter.format(new Date(item.createdAt))}

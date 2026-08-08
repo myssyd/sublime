@@ -26,7 +26,8 @@ const assetKind = v.union(
   v.literal("character-primary"),
   v.literal("character-reference"),
   v.literal("picture-reference"),
-  v.literal("video-source")
+  v.literal("video-source"),
+  v.literal("audio-source")
 )
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -53,7 +54,9 @@ export const generateUploadUrl = mutation({
           ? `${base}/characters/${args.groupId}/references`
           : args.kind === "picture-reference"
             ? `${base}/pictures/${args.groupId}/references`
-          : `${base}/videos/${args.groupId}/source`
+          : args.kind === "audio-source"
+            ? `${base}/videos/${args.groupId}/audio`
+            : `${base}/videos/${args.groupId}/source`
 
     return r2.generateUploadUrl(`${directory}/${crypto.randomUUID()}`)
   },

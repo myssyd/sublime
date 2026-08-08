@@ -12,6 +12,7 @@ import {
   IconFileUpload,
   IconLink,
   IconLoader2,
+  IconMicrophone,
   IconMovie,
   IconPaperclip,
   IconPhoto,
@@ -40,13 +41,20 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAssetUpload } from "@/lib/use-asset-upload"
 import { track } from "@/lib/posthog"
 import { cn } from "@/lib/utils"
-import { imageCreditsForModel, videoCreditsForDuration } from "@/convex/billing"
+import {
+  imageCreditsForModel,
+  lipSyncCreditsForDuration,
+  videoCreditsForDuration,
+} from "@/convex/billing"
 
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024
 const MIN_VIDEO_SECONDS = 3
 const MAX_VIDEO_SECONDS = 10
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024
+const MIN_AUDIO_SECONDS = 2
+const MAX_AUDIO_SECONDS = 60
 
-type CreateMode = "picture" | "video"
+type CreateMode = "picture" | "reel-clone" | "lip-sync"
 type ContentMode = "photos" | "videos"
 type ReferenceSource = "upload" | "instagram"
 type FetchedReel = {
@@ -191,6 +199,25 @@ function readVideoDuration(file: File) {
   })
 }
 
+function readAudioDuration(file: File) {
+  return new Promise<number>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const element = document.createElement("audio")
+    element.preload = "metadata"
+    element.onloadedmetadata = () => {
+      const duration = element.duration
+      URL.revokeObjectURL(objectUrl)
+      if (Number.isFinite(duration)) resolve(duration)
+      else reject(new Error("Could not read the audio duration"))
+    }
+    element.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error("Could not read this audio file"))
+    }
+    element.src = objectUrl
+  })
+}
+
 function formatFileSize(bytes: number) {
   const megabytes = bytes / 1024 / 1024
   return megabytes >= 0.1
@@ -228,31 +255,34 @@ function VideoReferencePair({
           <IconPlus className="size-4" stroke={2} />
         </span>
         <div className="min-w-0">
-          <div className="flex h-6 items-center justify-between gap-2">
+          <div className="flex h-6 items-center gap-2">
             <p className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Character look
             </p>
-            <button
-              type="button"
-              aria-expanded={imagePickerOpen}
-              aria-controls="video-image-options"
-              onClick={onToggleImagePicker}
-              className="shrink-0 text-xs font-semibold text-foreground underline-offset-4 hover:underline"
-            >
-              {imagePickerOpen ? "Done" : "Change"}
-            </button>
           </div>
-          <div className="relative mt-2 aspect-[9/16] overflow-hidden rounded-2xl bg-muted shadow-sm">
+          <button
+            type="button"
+            aria-expanded={imagePickerOpen}
+            aria-controls="video-image-options"
+            aria-label={imagePickerOpen ? "Close character frame picker" : "Change character frame"}
+            onClick={onToggleImagePicker}
+            className="group relative mt-2 block aspect-[9/16] w-full overflow-hidden rounded-2xl bg-muted text-left shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selectedImage.url}
               alt={`${selectedImage.label} for the generated video`}
-              className="size-full object-cover"
+              className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025] group-focus-visible:scale-[1.025] motion-reduce:transform-none"
             />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8">
               <p className="truncate text-xs font-medium text-white">{selectedImage.label}</p>
             </div>
-          </div>
+            <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
+                <IconPhoto className="size-3.5" /> {imagePickerOpen ? "Done" : "Change frame"}
+              </span>
+            </span>
+          </button>
         </div>
 
         <div className="min-w-0">
@@ -318,10 +348,12 @@ export default function CreatePage() {
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
   const createVideo = useAction(api.videoSubmission.createAndQueue)
+  const createLipSync = useAction(api.lipSyncSubmission.createAndQueue)
   const generatePicture = useAction(api.characterGeneration.generateCreation)
   const importInstagramReel = useAction(api.videoImport.importInstagramReel)
   const uploadAsset = useAssetUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const audioFileInputRef = useRef<HTMLInputElement>(null)
   const pictureFileInputRef = useRef<HTMLInputElement>(null)
   const pictureAttachmentsRef = useRef<PictureAttachment[]>([])
   const reelImportAttemptRef = useRef(0)
@@ -347,6 +379,10 @@ export default function CreatePage() {
   const [prompt, setPrompt] = useState("")
   const [keepAudio, setKeepAudio] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [audio, setAudio] = useState<File | null>(null)
+  const [audioDuration, setAudioDuration] = useState<number | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
+  const [submittingLipSync, setSubmittingLipSync] = useState(false)
   const [contentMode, setContentMode] = useState<ContentMode>("photos")
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null)
 
@@ -414,6 +450,9 @@ export default function CreatePage() {
   const videoCreditCost = selectedVideoDuration
     ? videoCreditsForDuration(selectedVideoDuration)
     : null
+  const lipSyncCreditCost = audioDuration
+    ? lipSyncCreditsForDuration(audioDuration)
+    : null
 
   async function importReel(sourceUrl: string) {
     if (
@@ -469,6 +508,13 @@ export default function CreatePage() {
       if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
     },
     [videoPreviewUrl]
+  )
+
+  useEffect(
+    () => () => {
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl)
+    },
+    [audioPreviewUrl]
   )
 
   useEffect(
@@ -560,6 +606,33 @@ export default function CreatePage() {
     }
   }
 
+  async function chooseAudio(file: File | undefined) {
+    if (!file) return
+    const extension = file.name.split(".").pop()?.toLowerCase()
+    if (!extension || !["mp3", "wav", "m4a", "aac", "ogg"].includes(extension)) {
+      toast.error("Choose an MP3, WAV, M4A, AAC, or OGG audio file")
+      return
+    }
+    if (file.size > MAX_AUDIO_BYTES) {
+      toast.error("Audio must be smaller than 20 MB")
+      return
+    }
+    try {
+      const duration = await readAudioDuration(file)
+      if (duration < MIN_AUDIO_SECONDS || duration > MAX_AUDIO_SECONDS) {
+        toast.error("Audio must be between 2 and 60 seconds")
+        return
+      }
+      setAudio(file)
+      setAudioDuration(duration)
+      setAudioPreviewUrl(URL.createObjectURL(file))
+    } catch (error) {
+      toast.error("Could not use this audio", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   async function handleGeneratePicture() {
     if (!activeCharacterId || !picturePrompt.trim()) return
     setGeneratingPicture(true)
@@ -629,7 +702,7 @@ export default function CreatePage() {
       }
 
       track("generation_requested", {
-        kind: "video",
+        kind: "reel_clone",
         source_kind: referenceSource,
         keep_audio: keepAudio,
         duration_seconds: selectedVideoDuration,
@@ -646,6 +719,7 @@ export default function CreatePage() {
         keepAudio,
       })
       track("video_queued", {
+        kind: "reel_clone",
         source_kind: referenceSource,
         keep_audio: keepAudio,
         duration_seconds: selectedVideoDuration,
@@ -662,7 +736,7 @@ export default function CreatePage() {
       if (fileInputRef.current) fileInputRef.current.value = ""
     } catch (error) {
       track("generation_failed", {
-        kind: "video",
+        kind: "reel_clone",
         source_kind: referenceSource,
       })
       toast.error("Could not start the clone", {
@@ -673,11 +747,50 @@ export default function CreatePage() {
     }
   }
 
+  async function handleGenerateLipSync() {
+    if (!activeCharacterId || !selectedVideoImage || !audio || audioDuration === null) {
+      return
+    }
+    setSubmittingLipSync(true)
+    try {
+      const sourceAudioKey = await uploadAsset(
+        audio,
+        "audio-source",
+        crypto.randomUUID()
+      )
+      track("generation_requested", {
+        kind: "lip_sync",
+        duration_seconds: audioDuration,
+      })
+      await createLipSync({
+        characterId: activeCharacterId,
+        characterImageKey: selectedVideoImage.key,
+        sourceAudioKey,
+        sourceFileName: audio.name,
+      })
+      track("video_queued", {
+        kind: "lip_sync",
+        duration_seconds: audioDuration,
+      })
+      setAudio(null)
+      setAudioDuration(null)
+      setAudioPreviewUrl(null)
+      if (audioFileInputRef.current) audioFileInputRef.current.value = ""
+    } catch (error) {
+      track("generation_failed", { kind: "lip_sync" })
+      toast.error("Could not start the lip sync", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSubmittingLipSync(false)
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <StudioHeader
         title="Studio"
-        description="Choose a character, then create their next picture or video."
+        description="Choose a character, then create a picture, clone a Reel, or make them speak."
       />
 
       <main className="w-full px-5 pb-10 md:px-8 lg:px-10">
@@ -781,7 +894,8 @@ export default function CreatePage() {
                   <div className="flex justify-center px-5 pt-5 sm:px-6">
                     <TabsList aria-label="Creation type">
                       <TabsTrigger value="picture"><IconPhoto className="size-4" /> Picture</TabsTrigger>
-                      <TabsTrigger value="video"><IconMovie className="size-4" /> Video</TabsTrigger>
+                      <TabsTrigger value="reel-clone"><IconMovie className="size-4" /> Reel Clone</TabsTrigger>
+                      <TabsTrigger value="lip-sync"><IconMicrophone className="size-4" /> Lip Sync</TabsTrigger>
                     </TabsList>
                   </div>
 
@@ -951,7 +1065,7 @@ export default function CreatePage() {
                     </Button>
                   </TabsContent>
 
-                  <TabsContent value="video" className="p-5 pt-6 sm:p-6 sm:pt-6">
+                  <TabsContent value="reel-clone" className="p-5 pt-6 sm:p-6 sm:pt-6">
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1099,11 +1213,171 @@ export default function CreatePage() {
 
                     <Button size="lg" className="mt-4 w-full text-sm" onClick={handleGenerateVideo} disabled={!selectedCharacter || !selectedVideoImage || !hasReference || submitting || fetchingReel}>
                       {submitting ? <IconLoader2 className="size-5 animate-spin" /> : null}
-                      {submitting ? (referenceSource === "instagram" ? "Queuing clone…" : "Uploading & queuing…") : "Create video"}
+                      {submitting ? (referenceSource === "instagram" ? "Queuing clone…" : "Uploading & queuing…") : "Clone Reel"}
                       {!submitting && videoCreditCost ? (
                         <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
                           <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
                           {videoCreditCost}
+                        </span>
+                      ) : null}
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="lip-sync" className="p-5 pt-6 sm:p-6 sm:pt-6">
+                    <input
+                      ref={audioFileInputRef}
+                      type="file"
+                      accept="audio/mpeg,audio/wav,audio/mp4,audio/aac,audio/ogg,.mp3,.wav,.m4a,.aac,.ogg"
+                      className="hidden"
+                      onChange={(event) => void chooseAudio(event.target.files?.[0])}
+                    />
+
+                    {selectedVideoImage ? (
+                      <div>
+                        <div className="relative grid grid-cols-2 gap-3">
+                          <span className="sr-only">Combine this character look with this voice track</span>
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-1/2 top-[calc(50%+1rem)] z-10 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-card text-foreground shadow-md"
+                          >
+                            <IconPlus className="size-4" stroke={2} />
+                          </span>
+
+                          <div className="min-w-0">
+                            <div className="flex h-6 items-center gap-2">
+                              <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                                <IconPhoto className="size-3.5 shrink-0" /> Character look
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              aria-expanded={videoImagePickerOpen}
+                              aria-controls="lip-sync-image-options"
+                              aria-label={videoImagePickerOpen ? "Close character frame picker" : "Change character frame"}
+                              onClick={() => setVideoImagePickerOpen((open) => !open)}
+                              className="group relative mt-2 block aspect-[9/16] w-full overflow-hidden rounded-2xl bg-muted text-left shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={selectedVideoImage.url}
+                                alt={`${selectedVideoImage.label} for lip sync`}
+                                className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.025] group-focus-visible:scale-[1.025] motion-reduce:transform-none"
+                              />
+                              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8">
+                                <p className="truncate text-xs font-medium text-white">{selectedVideoImage.label}</p>
+                              </div>
+                              <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
+                                  <IconPhoto className="size-3.5" /> {videoImagePickerOpen ? "Done" : "Change frame"}
+                                </span>
+                              </span>
+                            </button>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex h-6 items-center justify-between gap-2">
+                              <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                                <IconMicrophone className="size-3.5 shrink-0" /> Voice track
+                              </p>
+                              {audio ? (
+                                <button
+                                  type="button"
+                                  disabled={submittingLipSync}
+                                  onClick={() => audioFileInputRef.current?.click()}
+                                  className="shrink-0 text-xs font-semibold text-foreground underline-offset-4 hover:underline disabled:opacity-50"
+                                >
+                                  Replace
+                                </button>
+                              ) : null}
+                            </div>
+
+                            {audio && audioPreviewUrl && audioDuration !== null ? (
+                              <div className="mt-2 flex aspect-[9/16] flex-col justify-between overflow-hidden rounded-2xl border bg-background p-3 shadow-sm">
+                                <div className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
+                                  <span className="grid size-11 place-items-center rounded-full bg-primary/12 text-primary">
+                                    <IconMicrophone className="size-5" />
+                                  </span>
+                                  <p className="mt-3 line-clamp-2 break-all text-xs font-semibold">{audio.name}</p>
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    {audioDuration.toFixed(1)} sec · {formatFileSize(audio.size)}
+                                  </p>
+                                </div>
+                                <audio
+                                  key={audioPreviewUrl}
+                                  src={audioPreviewUrl}
+                                  controls
+                                  preload="metadata"
+                                  className="h-9 w-full max-w-full"
+                                >
+                                  Your browser does not support audio playback.
+                                </audio>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={submittingLipSync}
+                                onClick={() => audioFileInputRef.current?.click()}
+                                className="mt-2 flex aspect-[9/16] w-full flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/25 px-4 text-center shadow-sm transition-colors hover:border-primary/55 hover:bg-primary/[0.04] disabled:opacity-50"
+                              >
+                                <span className="grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+                                  <IconFileUpload className="size-5" />
+                                </span>
+                                <span className="mt-3 text-sm font-medium">Upload voice</span>
+                                <span className="mt-1 text-[11px] leading-4 text-muted-foreground">MP3, WAV, M4A, AAC, or OGG<br />2–60 seconds</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {videoImagePickerOpen ? (
+                          <div id="lip-sync-image-options" className="mt-3 rounded-2xl bg-muted/45 p-3">
+                            <p className="text-xs font-medium">Choose the image to bring to life</p>
+                            <div className="mt-2.5 grid grid-cols-4 gap-2 sm:grid-cols-5">
+                              {videoImageOptions.map((image) => {
+                                const selected = image.key === selectedVideoImage.key
+                                return (
+                                  <button
+                                    key={image.key}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    aria-label={`Use ${image.label}`}
+                                    onClick={() => {
+                                      setVideoCharacterImageKey(image.key)
+                                      setVideoImagePickerOpen(false)
+                                    }}
+                                    className={cn(
+                                      "relative aspect-square overflow-hidden rounded-xl bg-muted ring-offset-2 ring-offset-card transition hover:opacity-90",
+                                      selected && "ring-2 ring-primary"
+                                    )}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={image.url} alt="" className="size-full object-cover" />
+                                    {selected ? (
+                                      <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground">
+                                        <IconCheck className="size-2.5" stroke={3} />
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <Button
+                      size="lg"
+                      className="mt-4 w-full text-sm"
+                      onClick={handleGenerateLipSync}
+                      disabled={!selectedCharacter || !selectedVideoImage || !audio || audioDuration === null || submittingLipSync}
+                    >
+                      {submittingLipSync ? <IconLoader2 className="size-5 animate-spin" /> : null}
+                      {submittingLipSync ? "Uploading & queuing…" : "Create lip sync"}
+                      {!submittingLipSync && lipSyncCreditCost ? (
+                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                          {lipSyncCreditCost}
                         </span>
                       ) : null}
                     </Button>
@@ -1182,7 +1456,7 @@ export default function CreatePage() {
                       <div>
                         <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground"><IconMovie className="size-5" /></span>
                         <p className="mt-4 text-sm font-medium">No videos yet</p>
-                        <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Switch to Video and add a Reel or upload to create the first performance.</p>
+                        <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Use Reel Clone or Lip Sync to create the first performance.</p>
                       </div>
                     </div>
                   ) : (

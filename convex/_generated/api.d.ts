@@ -19,6 +19,7 @@ import type * as http from "../http.js";
 import type * as jobs from "../jobs.js";
 import type * as lib_instagram from "../lib/instagram.js";
 import type * as lib_videoValidation from "../lib/videoValidation.js";
+import type * as lipSyncSubmission from "../lipSyncSubmission.js";
 import type * as stripe from "../stripe.js";
 import type * as videoGeneration from "../videoGeneration.js";
 import type * as videoImport from "../videoImport.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   jobs: typeof jobs;
   "lib/instagram": typeof lib_instagram;
   "lib/videoValidation": typeof lib_videoValidation;
+  lipSyncSubmission: typeof lipSyncSubmission;
   stripe: typeof stripe;
   videoGeneration: typeof videoGeneration;
   videoImport: typeof videoImport;

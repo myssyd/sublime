@@ -19,7 +19,7 @@ type LedgerReason =
   | "refund"
   | "expiry"
 
-type UsageOperation = "character_image" | "video_clone"
+type UsageOperation = "character_image" | "video_clone" | "lip_sync"
 
 export function availableBalances(sub: {
   subscriptionBalance: number
@@ -441,7 +441,8 @@ export const recordProviderSuccess = internalMutation({
     reservationKey: v.string(),
     operation: v.union(
       v.literal("character_image"),
-      v.literal("video_clone")
+      v.literal("video_clone"),
+      v.literal("lip_sync")
     ),
     model: v.string(),
     providerRequestId: v.optional(v.string()),
@@ -486,7 +487,8 @@ export const recordProviderFailure = internalMutation({
     reservationKey: v.string(),
     operation: v.union(
       v.literal("character_image"),
-      v.literal("video_clone")
+      v.literal("video_clone"),
+      v.literal("lip_sync")
     ),
     model: v.string(),
     elapsedMs: v.number(),

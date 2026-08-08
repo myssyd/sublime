@@ -4,7 +4,10 @@ import { authComponent } from "./auth"
 import { publicAssetUrl } from "./assets"
 import { videoPool } from "./jobs"
 import { internal } from "./_generated/api"
-import { videoCreditsForDuration } from "./billing"
+import {
+  lipSyncCreditsForDuration,
+  videoCreditsForDuration,
+} from "./billing"
 import { reserveCredits } from "./credits"
 import {
   internalMutation,
@@ -33,7 +36,9 @@ export const list = query({
           characterImageUrl: characterImageKey
             ? publicAssetUrl(characterImageKey)
             : null,
-          sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
+          sourceVideoUrl: video.sourceVideoKey
+            ? publicAssetUrl(video.sourceVideoKey)
+            : null,
           outputVideoUrl: video.outputVideoKey
             ? publicAssetUrl(video.outputVideoKey)
             : null,
@@ -62,7 +67,9 @@ export const listForCharacter = query({
 
     return videos.map((video) => ({
       ...video,
-      sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
+      sourceVideoUrl: video.sourceVideoKey
+        ? publicAssetUrl(video.sourceVideoKey)
+        : null,
       outputVideoUrl: video.outputVideoKey
         ? publicAssetUrl(video.outputVideoKey)
         : null,
@@ -111,7 +118,9 @@ export const listPage = query({
             characterImageUrl: characterImageKey
               ? publicAssetUrl(characterImageKey)
               : null,
-            sourceVideoUrl: publicAssetUrl(video.sourceVideoKey),
+            sourceVideoUrl: video.sourceVideoKey
+              ? publicAssetUrl(video.sourceVideoKey)
+              : null,
             outputVideoUrl: video.outputVideoKey
               ? publicAssetUrl(video.outputVideoKey)
               : null,
@@ -168,6 +177,7 @@ export const internalCreateAndQueue = internalMutation({
     const videoId = await ctx.db.insert("videos", {
       userId: args.userId,
       characterId: args.characterId,
+      videoKind: "reel_clone",
       characterImageKey: args.characterImageKey,
       sourceVideoKey: args.sourceVideoKey,
       sourceFileName: args.sourceFileName,
@@ -198,6 +208,88 @@ export const internalCreateAndQueue = internalMutation({
     await videoPool.enqueueAction(
       ctx,
       internal.videoGeneration.generateClone,
+      { videoId },
+      { retry: false }
+    )
+    return videoId
+  },
+})
+
+export const internalCreateLipSyncAndQueue = internalMutation({
+  args: {
+    userId: v.string(),
+    characterId: v.id("characters"),
+    characterImageKey: v.string(),
+    sourceAudioKey: v.string(),
+    sourceAudioContentType: v.string(),
+    sourceFileName: v.string(),
+    sourceDurationSeconds: v.number(),
+    sourceFileSize: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const character = await ctx.db.get(args.characterId)
+    if (
+      !character ||
+      character.userId !== args.userId ||
+      character.status === "draft" ||
+      !character.primaryImageKey
+    ) {
+      throw new Error("Character not found")
+    }
+    const allowedCharacterImageKeys = new Set([
+      character.primaryImageKey,
+      ...character.referenceImageKeys,
+      ...(character.creationImages ?? []).map((image) => image.key),
+      ...(character.creationImageKeys ?? []),
+    ])
+    if (!allowedCharacterImageKeys.has(args.characterImageKey)) {
+      throw new Error("Selected character image not found")
+    }
+    if (
+      args.sourceDurationSeconds < 2 ||
+      args.sourceDurationSeconds > 60
+    ) {
+      throw new Error("Audio must be between 2 and 60 seconds")
+    }
+    if (args.sourceFileSize > 20 * 1024 * 1024) {
+      throw new Error("Audio must be smaller than 20 MB")
+    }
+
+    const now = Date.now()
+    const videoId = await ctx.db.insert("videos", {
+      userId: args.userId,
+      characterId: args.characterId,
+      videoKind: "lip_sync",
+      characterImageKey: args.characterImageKey,
+      sourceAudioKey: args.sourceAudioKey,
+      sourceAudioContentType: args.sourceAudioContentType,
+      sourceFileName: args.sourceFileName,
+      sourceKind: "upload",
+      sourceDurationSeconds: args.sourceDurationSeconds,
+      sourceFileSize: args.sourceFileSize,
+      prompt: "",
+      keepAudio: true,
+      provider: "fal-sync-lipsync-v3",
+      status: "queued",
+      createdAt: now,
+      updatedAt: now,
+    })
+    const creditReservationKey = `lip-sync:${videoId}`
+    const credits = lipSyncCreditsForDuration(args.sourceDurationSeconds)
+    await reserveCredits(ctx, {
+      userId: args.userId,
+      credits,
+      reservationKey: creditReservationKey,
+      kind: "lip_sync",
+      refId: videoId,
+    })
+    await ctx.db.patch(videoId, {
+      creditReservationKey,
+      creditsCharged: credits,
+    })
+    await videoPool.enqueueAction(
+      ctx,
+      internal.videoGeneration.generateLipSync,
       { videoId },
       { retry: false }
     )
