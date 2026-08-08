@@ -603,9 +603,6 @@ export function CharactersExperience({
                                         </button>
                                       ) : null}
                                     </div>
-                                    <p className="mt-3 text-xs text-muted-foreground">
-                                      Drop more here or remove individual references
-                                    </p>
                                   </>
                                 ) : (
                                   <button
@@ -628,6 +625,11 @@ export function CharactersExperience({
                                   </button>
                                 )}
                               </div>
+                              {sourceImages.length ? (
+                                <p className="mt-2 text-center text-xs text-muted-foreground">
+                                  Drop more here or remove individual references
+                                </p>
+                              ) : null}
                             </div>
                           ) : (
                             <div className="mt-5 space-y-4">
@@ -688,7 +690,7 @@ export function CharactersExperience({
                         </div>
 
                         {sourceKind === "image" ? (
-                          <aside className="h-fit rounded-2xl border bg-muted/20 p-5">
+                          <aside className="h-fit lg:pt-8">
                             <div className="space-y-4">
                               <label className="block space-y-2">
                                 <span className="text-sm font-medium">
