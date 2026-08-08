@@ -863,7 +863,7 @@ export function CharactersExperience({
                           alt="Generated hero candidate"
                           className="h-full max-h-[660px] w-full object-contain"
                         />
-                      ) : (
+                      ) : generatingHero ? (
                         <div className="text-center text-muted-foreground">
                           <IconLoader2 className="mx-auto size-6 animate-spin" />
                           <p className="mt-3 text-sm">
@@ -871,6 +871,18 @@ export function CharactersExperience({
                           </p>
                           <p className="mt-1 text-xs">
                             Draft saved. You can leave and return anytime.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center text-muted-foreground">
+                          <IconAlertCircle className="mx-auto size-6" />
+                          <p className="mt-3 text-sm">
+                            {draft.generationError
+                              ? "Hero generation failed"
+                              : "Hero generation was interrupted"}
+                          </p>
+                          <p className="mt-1 text-xs">
+                            Generate it again to continue this draft.
                           </p>
                         </div>
                       )}
