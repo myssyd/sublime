@@ -1,12 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Dialog } from "@base-ui/react/dialog"
 import { useAction, usePaginatedQuery, useQuery } from "convex/react"
 import {
-  IconArrowRight,
   IconBolt,
   IconCheck,
   IconDownload,
@@ -30,7 +28,8 @@ import type { CharacterImageSource } from "@/convex/lib/image"
 import type { VideoModel } from "@/convex/lib/videoModel"
 import { StudioHeader } from "@/components/studio-header"
 import { StudioEmptyState } from "@/components/studio-empty-state"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { CharactersExperience } from "@/components/characters-experience"
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -124,6 +123,7 @@ function ContentGallery({
   items,
   mode,
   loading = false,
+  skeletonCount = 1,
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -132,15 +132,28 @@ function ContentGallery({
   items: ContentItem[]
   mode: ContentMode
   loading?: boolean
+  skeletonCount?: number
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
   onPreview: (media: PreviewMedia) => void
 }) {
-  if (loading && items.length === 0) {
+  if (loading) {
+    const visibleSkeletonCount = Math.max(1, Math.min(skeletonCount, 24))
+
     return (
-      <div className="grid min-h-64 flex-1 place-items-center text-muted-foreground">
-        <IconLoader2 className="size-5 animate-spin" />
+      <div
+        role="status"
+        aria-label="Loading content"
+        className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-[repeat(auto-fill,minmax(8.5rem,10rem))] sm:p-5"
+      >
+        {Array.from({ length: visibleSkeletonCount }, (_, index) => (
+          <div
+            key={index}
+            aria-hidden="true"
+            className="aspect-[9/16] animate-pulse rounded-xl bg-muted motion-reduce:animate-none"
+          />
+        ))}
       </div>
     )
   }
@@ -618,6 +631,7 @@ export default function CreatePage() {
   const reelImportAttemptRef = useRef(0)
   const importingReelUrlRef = useRef<string | null>(null)
   const [characterId, setCharacterId] = useState<Id<"characters"> | null>(null)
+  const [characterBuilderOpen, setCharacterBuilderOpen] = useState(false)
   const [createMode, setCreateMode] = useState<CreateMode>("picture")
   const [picturePrompt, setPicturePrompt] = useState("")
   const [pictureModel, setPictureModel] = useState<PictureModel>("seedream-5")
@@ -1124,9 +1138,9 @@ export default function CreatePage() {
             title="Create your first character"
             description="Every studio starts with a face. Build an AI character, then come back to create their content."
             action={
-              <Link href="/characters" className={buttonVariants()}>
-                Create a character <IconArrowRight className="size-4" />
-              </Link>
+              <Button onClick={() => setCharacterBuilderOpen(true)}>
+                <IconPlus className="size-4" /> Create a character
+              </Button>
             }
           />
         ) : (
@@ -1180,12 +1194,12 @@ export default function CreatePage() {
                     )
                   })}
 
-                  <Link href="/characters" className="group w-12 shrink-0 text-center" aria-label="Create a new character">
+                  <button type="button" onClick={() => setCharacterBuilderOpen(true)} className="group w-12 shrink-0 text-center" aria-label="Create a new character">
                     <span className="mx-auto grid size-12 place-items-center rounded-full border border-dashed border-muted-foreground/45 bg-muted/35 text-muted-foreground transition-colors group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary">
                       <IconPlus className="size-4" stroke={1.8} />
                     </span>
                     <span className="mt-1.5 block text-[10px] font-medium text-muted-foreground group-hover:text-foreground">New</span>
-                  </Link>
+                  </button>
                 </div>
               </section>
 
@@ -1795,6 +1809,7 @@ export default function CreatePage() {
                     items={allContentItems}
                     mode="all"
                     loading={characterImagesLoading || selectedCharacterVideos === undefined}
+                    skeletonCount={(selectedCharacter?.imageCount ?? 0) + (selectedCharacter?.videoCount ?? 0)}
                     hasMore={characterImagesHaveMore}
                     loadingMore={characterImageStatus === "LoadingMore"}
                     onLoadMore={() => loadMoreCharacterImages(24)}
@@ -1807,6 +1822,7 @@ export default function CreatePage() {
                     items={photoContentItems}
                     mode="photos"
                     loading={characterImagesLoading}
+                    skeletonCount={selectedCharacter?.imageCount ?? 0}
                     hasMore={characterImagesHaveMore}
                     loadingMore={characterImageStatus === "LoadingMore"}
                     onLoadMore={() => loadMoreCharacterImages(24)}
@@ -1819,6 +1835,7 @@ export default function CreatePage() {
                     items={videoContentItems}
                     mode="videos"
                     loading={selectedCharacterVideos === undefined}
+                    skeletonCount={selectedCharacter?.videoCount ?? 0}
                     onPreview={setPreviewMedia}
                   />
                 </TabsContent>
@@ -1827,6 +1844,17 @@ export default function CreatePage() {
           </div>
         )}
       </main>
+
+      <CharactersExperience
+        standalone={false}
+        open={characterBuilderOpen}
+        onOpenChange={setCharacterBuilderOpen}
+        onCreated={(newCharacterId) => {
+          setCharacterId(newCharacterId)
+          setVideoCharacterImageSelection(null)
+          setVideoImagePickerOpen(false)
+        }}
+      />
 
       <Dialog.Root
         open={previewMedia !== null}
