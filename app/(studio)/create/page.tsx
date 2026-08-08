@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { Dialog } from "@base-ui/react/dialog"
 import { useAction, usePaginatedQuery, useQuery } from "convex/react"
 import {
+  IconActivity,
   IconBolt,
   IconCheck,
   IconDownload,
@@ -46,19 +47,22 @@ import { cn } from "@/lib/utils"
 import {
   imageCreditsForModel,
   lipSyncCreditsForDuration,
+  motionControlCreditsForDuration,
   videoCreditsForDuration,
 } from "@/convex/billing"
 
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024
 const MIN_VIDEO_SECONDS = 3
 const MAX_VIDEO_SECONDS = 10
+const MAX_MOTION_VIDEO_SECONDS = 30
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024
 const MIN_AUDIO_SECONDS = 2
 const MAX_AUDIO_SECONDS = 60
 
-type CreateMode = "picture" | "reel-clone" | "lip-sync"
+type CreateMode = "picture" | "reel-clone" | "motion-control" | "lip-sync"
 type ContentMode = "all" | "photos" | "videos"
 type ReferenceSource = "upload" | "instagram"
+type MotionOrientation = "video" | "image"
 type FetchedReel = {
   key: string
   fileName: string
@@ -170,7 +174,8 @@ function ContentGallery({
           ? {
               icon: <IconMovie className="size-5" />,
               title: "No videos yet",
-              description: "Use Reel Clone or Lip Sync to create the first performance.",
+              description:
+                "Use Reel Clone, Motion, or Lip Sync to create the first performance.",
             }
           : {
               icon: <IconPhoto className="size-5" />,
@@ -503,14 +508,22 @@ function formatFileSize(bytes: number) {
 function VideoReferencePair({
   videoSrc,
   videoTitle,
+  videoLabel = "Source motion",
+  onChooseVideo,
+  videoDisabled = false,
+  pickerId,
   imageOptions,
   selectedImage,
   imagePickerOpen,
   onToggleImagePicker,
   onSelectImage,
 }: {
-  videoSrc: string
-  videoTitle: string
+  videoSrc?: string | null
+  videoTitle?: string
+  videoLabel?: string
+  onChooseVideo?: () => void
+  videoDisabled?: boolean
+  pickerId: string
   imageOptions: VideoImageOption[]
   selectedImage: VideoImageOption
   imagePickerOpen: boolean
@@ -536,7 +549,7 @@ function VideoReferencePair({
           <button
             type="button"
             aria-expanded={imagePickerOpen}
-            aria-controls="video-image-options"
+            aria-controls={pickerId}
             aria-label={imagePickerOpen ? "Close character frame picker" : "Change character frame"}
             onClick={onToggleImagePicker}
             className="group relative mt-2 block aspect-[9/16] w-full overflow-hidden rounded-2xl bg-muted text-left shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
@@ -561,27 +574,44 @@ function VideoReferencePair({
         <div className="min-w-0">
           <div className="flex h-6 items-center gap-2">
             <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              <IconMovie className="size-3.5 shrink-0" /> Source motion
+              <IconMovie className="size-3.5 shrink-0" /> {videoLabel}
             </p>
           </div>
-          <div className="mt-2 aspect-[9/16] overflow-hidden rounded-2xl bg-muted shadow-sm">
+          {videoSrc ? (
+            <div className="mt-2 aspect-[9/16] overflow-hidden rounded-2xl bg-muted shadow-sm">
             <video
               key={videoSrc}
               src={videoSrc}
               controls
               playsInline
               preload="metadata"
-              aria-label={`${videoTitle} preview`}
+              aria-label={`${videoTitle ?? videoLabel} preview`}
               className="size-full object-cover"
             >
               Your browser does not support video playback.
             </video>
-          </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={videoDisabled || !onChooseVideo}
+              onClick={onChooseVideo}
+              className="mt-2 flex aspect-[9/16] w-full flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/25 px-3 text-center shadow-sm transition-colors hover:border-primary/55 hover:bg-primary/[0.04] disabled:opacity-50"
+            >
+              <span className="grid size-11 place-items-center rounded-full bg-muted text-muted-foreground">
+                <IconFileUpload className="size-5" />
+              </span>
+              <span className="mt-3 text-sm font-medium">Upload motion</span>
+              <span className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                MP4 or MOV<br />3–30 seconds
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
       {imagePickerOpen ? (
-        <div id="video-image-options" className="mt-3 rounded-2xl bg-muted/45 p-3">
+        <div id={pickerId} className="mt-3 rounded-2xl bg-muted/45 p-3">
           <p className="text-xs font-medium">Choose the outfit and look to preserve</p>
           <div className="mt-2.5 grid grid-cols-4 gap-2 sm:grid-cols-5">
             {imageOptions.map((image) => {
@@ -620,11 +650,15 @@ export default function CreatePage() {
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
   const createVideo = useAction(api.videoSubmission.createAndQueue)
+  const createMotionControl = useAction(
+    api.motionControlSubmission.createAndQueue
+  )
   const createLipSync = useAction(api.lipSyncSubmission.createAndQueue)
   const generatePicture = useAction(api.characterGeneration.generateCreation)
   const importInstagramReel = useAction(api.videoImport.importInstagramReel)
   const uploadAsset = useAssetUpload()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const motionFileInputRef = useRef<HTMLInputElement>(null)
   const audioFileInputRef = useRef<HTMLInputElement>(null)
   const pictureFileInputRef = useRef<HTMLInputElement>(null)
   const pictureAttachmentsRef = useRef<PictureAttachment[]>([])
@@ -655,6 +689,21 @@ export default function CreatePage() {
   const [videoModel, setVideoModel] =
     useState<VideoModel>("kling-o3-pro")
   const [submitting, setSubmitting] = useState(false)
+  const [motionCharacterImageSelection, setMotionCharacterImageSelection] =
+    useState<string | null>(null)
+  const [motionImagePickerOpen, setMotionImagePickerOpen] = useState(false)
+  const [motionVideo, setMotionVideo] = useState<File | null>(null)
+  const [motionVideoDuration, setMotionVideoDuration] = useState<number | null>(
+    null
+  )
+  const [motionVideoPreviewUrl, setMotionVideoPreviewUrl] = useState<
+    string | null
+  >(null)
+  const [motionPrompt, setMotionPrompt] = useState("")
+  const [motionOrientation, setMotionOrientation] =
+    useState<MotionOrientation>("video")
+  const [motionKeepAudio, setMotionKeepAudio] = useState(true)
+  const [submittingMotion, setSubmittingMotion] = useState(false)
   const [audio, setAudio] = useState<File | null>(null)
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
@@ -758,6 +807,15 @@ export default function CreatePage() {
     ) ??
     videoImageOptions[0] ??
     null
+  const selectedMotionImage =
+    videoImageOptions.find(
+      (image) => image.key === motionCharacterImageSelection
+    ) ??
+    videoImageOptions.find(
+      (image) => image.key === selectedCharacter?.referenceImageKeys.at(-1)
+    ) ??
+    videoImageOptions[0] ??
+    null
 
   const canonicalReelUrl = canonicalInstagramReelUrl(reelUrl)
   const reelUrlValid = canonicalReelUrl !== null
@@ -779,6 +837,13 @@ export default function CreatePage() {
   const lipSyncCreditCost = audioDuration
     ? lipSyncCreditsForDuration(audioDuration)
     : null
+  const motionCreditCost = motionVideoDuration
+    ? motionControlCreditsForDuration(motionVideoDuration)
+    : null
+  const motionDurationSupported =
+    motionVideoDuration === null ||
+    motionOrientation === "video" ||
+    motionVideoDuration <= MAX_VIDEO_SECONDS
 
   async function importReel(sourceUrl: string) {
     if (
@@ -834,6 +899,13 @@ export default function CreatePage() {
       if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl)
     },
     [videoPreviewUrl]
+  )
+
+  useEffect(
+    () => () => {
+      if (motionVideoPreviewUrl) URL.revokeObjectURL(motionVideoPreviewUrl)
+    },
+    [motionVideoPreviewUrl]
   )
 
   useEffect(
@@ -927,6 +999,36 @@ export default function CreatePage() {
       setReferenceSource("upload")
     } catch (error) {
       toast.error("Could not use this video", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  async function chooseMotionVideo(file: File | undefined) {
+    if (!file) return
+    const extension = file.name.split(".").pop()?.toLowerCase()
+    if (!extension || !["mp4", "mov"].includes(extension)) {
+      toast.error("Choose an MP4 or MOV video")
+      return
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      toast.error("The motion video must be smaller than 200 MB")
+      return
+    }
+    try {
+      const duration = await readVideoDuration(file)
+      if (
+        duration < MIN_VIDEO_SECONDS ||
+        duration > MAX_MOTION_VIDEO_SECONDS
+      ) {
+        toast.error("The motion video must be between 3 and 30 seconds")
+        return
+      }
+      setMotionVideo(file)
+      setMotionVideoDuration(duration)
+      setMotionVideoPreviewUrl(URL.createObjectURL(file))
+    } catch (error) {
+      toast.error("Could not use this motion video", {
         description: error instanceof Error ? error.message : String(error),
       })
     }
@@ -1081,6 +1183,67 @@ export default function CreatePage() {
     }
   }
 
+  async function handleGenerateMotionControl() {
+    if (
+      !activeCharacterId ||
+      !selectedMotionImage ||
+      !motionVideo ||
+      motionVideoDuration === null
+    ) {
+      return
+    }
+    if (!motionDurationSupported) {
+      toast.error("Match image supports motion videos up to 10 seconds")
+      return
+    }
+    setSubmittingMotion(true)
+    try {
+      const sourceVideoKey = await uploadAsset(
+        motionVideo,
+        "video-source",
+        crypto.randomUUID()
+      )
+      track("generation_requested", {
+        kind: "motion_control",
+        model: "kling-v3-standard",
+        duration_seconds: motionVideoDuration,
+        character_orientation: motionOrientation,
+        keep_audio: motionKeepAudio,
+      })
+      await createMotionControl({
+        characterId: activeCharacterId,
+        characterImage: selectedMotionImage.source,
+        sourceVideoKey,
+        sourceFileName: motionVideo.name,
+        prompt: motionPrompt,
+        keepAudio: motionKeepAudio,
+        characterOrientation: motionOrientation,
+      })
+      track("video_queued", {
+        kind: "motion_control",
+        model: "kling-v3-standard",
+        duration_seconds: motionVideoDuration,
+        character_orientation: motionOrientation,
+        keep_audio: motionKeepAudio,
+      })
+      setMotionVideo(null)
+      setMotionVideoDuration(null)
+      setMotionVideoPreviewUrl(null)
+      setMotionPrompt("")
+      if (motionFileInputRef.current) motionFileInputRef.current.value = ""
+    } catch (error) {
+      track("generation_failed", {
+        kind: "motion_control",
+        model: "kling-v3-standard",
+      })
+      toast.error("Could not start Motion Control", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSubmittingMotion(false)
+    }
+  }
+
   async function handleGenerateLipSync() {
     if (!activeCharacterId || !selectedVideoImage || !audio || audioDuration === null) {
       return
@@ -1124,7 +1287,7 @@ export default function CreatePage() {
     <div className="min-h-screen">
       <StudioHeader
         title="Studio"
-        description="Choose a character, then create a picture, clone a Reel, or make them speak."
+        description="Choose a character, then create a picture, clone a Reel, control their motion, or make them speak."
       />
 
       <main className="w-full px-5 pb-10 md:px-8 lg:px-10">
@@ -1166,6 +1329,8 @@ export default function CreatePage() {
                           setCharacterId(character._id)
                           setVideoCharacterImageSelection(null)
                           setVideoImagePickerOpen(false)
+                          setMotionCharacterImageSelection(null)
+                          setMotionImagePickerOpen(false)
                         }}
                         className="group w-12 shrink-0 text-center"
                       >
@@ -1226,10 +1391,11 @@ export default function CreatePage() {
                   className="border-t"
                 >
                   <div className="flex justify-center px-5 pt-5 sm:px-6">
-                    <TabsList aria-label="Creation type">
-                      <TabsTrigger value="picture"><IconPhoto className="size-4" /> Picture</TabsTrigger>
-                      <TabsTrigger value="reel-clone"><IconMovie className="size-4" /> Reel Clone</TabsTrigger>
-                      <TabsTrigger value="lip-sync"><IconMicrophone className="size-4" /> Lip Sync</TabsTrigger>
+                    <TabsList aria-label="Creation type" className="max-w-full">
+                      <TabsTrigger value="picture" className="px-2 text-xs sm:px-3 sm:text-sm"><IconPhoto className="hidden size-4 sm:block" /> Picture</TabsTrigger>
+                      <TabsTrigger value="reel-clone" className="px-2 text-xs sm:px-3 sm:text-sm"><IconMovie className="hidden size-4 sm:block" /> Reel Clone</TabsTrigger>
+                      <TabsTrigger value="motion-control" className="px-2 text-xs sm:px-3 sm:text-sm"><IconActivity className="hidden size-4 sm:block" /> Motion</TabsTrigger>
+                      <TabsTrigger value="lip-sync" className="px-2 text-xs sm:px-3 sm:text-sm"><IconMicrophone className="hidden size-4 sm:block" /> Lip Sync</TabsTrigger>
                     </TabsList>
                   </div>
 
@@ -1444,6 +1610,7 @@ export default function CreatePage() {
                             <VideoReferencePair
                               videoSrc={videoPreviewUrl}
                               videoTitle={video.name}
+                              pickerId="reel-clone-image-options"
                               imageOptions={videoImageOptions}
                               selectedImage={selectedVideoImage}
                               imagePickerOpen={videoImagePickerOpen}
@@ -1504,6 +1671,7 @@ export default function CreatePage() {
                             <VideoReferencePair
                               videoSrc={fetchedReel.previewUrl}
                               videoTitle="Instagram Reel"
+                              pickerId="reel-clone-image-options"
                               imageOptions={videoImageOptions}
                               selectedImage={selectedVideoImage}
                               imagePickerOpen={videoImagePickerOpen}
@@ -1604,6 +1772,192 @@ export default function CreatePage() {
                         <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
                           <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
                           {videoCreditCost}
+                        </span>
+                      ) : null}
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="motion-control" className="p-5 pt-6 sm:p-6 sm:pt-6">
+                    <input
+                      ref={motionFileInputRef}
+                      type="file"
+                      accept="video/mp4,video/quicktime,.mp4,.mov"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        event.currentTarget.value = ""
+                        void chooseMotionVideo(file)
+                      }}
+                    />
+
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex items-center gap-2 text-sm font-semibold">
+                          <IconActivity className="size-4 text-muted-foreground" /> References
+                        </label>
+                        {motionVideo ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={submittingMotion}
+                            onClick={() => motionFileInputRef.current?.click()}
+                          >
+                            <IconFileUpload className="size-4" /> Replace
+                          </Button>
+                        ) : null}
+                      </div>
+
+                      {motionVideo && motionVideoDuration !== null ? (
+                        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-lime-700 dark:text-lime-400">
+                          <IconCheck className="size-3.5" /> Video ready · {motionVideoDuration.toFixed(1)} sec · {formatFileSize(motionVideo.size)}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Choose the character image and motion performance to combine.
+                        </p>
+                      )}
+
+                      {selectedMotionImage ? (
+                        <VideoReferencePair
+                          videoSrc={motionVideoPreviewUrl}
+                          videoTitle={motionVideo?.name}
+                          videoLabel="Motion video"
+                          onChooseVideo={() => motionFileInputRef.current?.click()}
+                          videoDisabled={submittingMotion}
+                          pickerId="motion-control-image-options"
+                          imageOptions={videoImageOptions}
+                          selectedImage={selectedMotionImage}
+                          imagePickerOpen={motionImagePickerOpen}
+                          onToggleImagePicker={() =>
+                            setMotionImagePickerOpen((open) => !open)
+                          }
+                          onSelectImage={(key) => {
+                            setMotionCharacterImageSelection(key)
+                            setMotionImagePickerOpen(false)
+                          }}
+                        />
+                      ) : null}
+                    </div>
+
+                    <div className="mt-7">
+                      <label className="text-sm font-semibold">Character orientation</label>
+                      <Select
+                        value={motionOrientation}
+                        disabled={submittingMotion}
+                        onValueChange={(value) => {
+                          if (value) setMotionOrientation(value as MotionOrientation)
+                        }}
+                      >
+                        <SelectTrigger
+                          aria-label={`Character orientation: ${motionOrientation === "video" ? "Match motion video" : "Match character image"}`}
+                          className="mt-3 h-11 w-full text-xs font-medium"
+                        >
+                          <SelectValue>
+                            {(value: MotionOrientation) => (
+                              <>
+                                <IconActivity className="size-4 text-muted-foreground" />
+                                <span className="truncate">
+                                  {value === "video" ? "Match motion video" : "Match character image"}
+                                </span>
+                              </>
+                            )}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent align="start" alignItemWithTrigger={false} className="w-80">
+                          <SelectItem value="video">
+                            <IconMovie className="size-4 text-muted-foreground" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium">Match motion video</span>
+                              <span className="mt-0.5 block text-[11px] text-muted-foreground">Best for complex movement · up to 30 sec</span>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="image">
+                            <IconPhoto className="size-4 text-muted-foreground" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium">Match character image</span>
+                              <span className="mt-0.5 block text-[11px] text-muted-foreground">Preserves image direction · up to 10 sec</span>
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {!motionDurationSupported ? (
+                        <p className="mt-2 text-xs text-destructive">
+                          Match character image supports videos up to 10 seconds.
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-7 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold">Video model</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">Motion transfer by fal</p>
+                      </div>
+                      <span className="rounded-full bg-muted px-3 py-1.5 text-xs font-medium">
+                        Kling V3 Standard
+                      </span>
+                    </div>
+
+                    <div className="mt-7">
+                      <label htmlFor="motion-prompt" className="text-sm font-semibold">
+                        Prompt <span className="font-normal text-muted-foreground">· optional</span>
+                      </label>
+                      <Textarea
+                        id="motion-prompt"
+                        value={motionPrompt}
+                        onChange={(event) => setMotionPrompt(event.target.value)}
+                        placeholder="Describe the setting, styling, or mood…"
+                        className="mt-3 min-h-24 resize-none"
+                      />
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between rounded-2xl bg-muted/45 px-3.5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <IconVolume className="size-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs font-medium">Keep original audio</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">Music, speech, and ambience</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={motionKeepAudio}
+                        aria-label="Keep original motion video audio"
+                        onClick={() => setMotionKeepAudio((value) => !value)}
+                        className={cn(
+                          "relative h-5 w-9 rounded-full bg-muted-foreground/30 transition-colors",
+                          motionKeepAudio && "bg-primary"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+                            motionKeepAudio && "translate-x-4"
+                          )}
+                        />
+                      </button>
+                    </div>
+
+                    <Button
+                      size="lg"
+                      className="mt-4 w-full text-sm"
+                      onClick={handleGenerateMotionControl}
+                      disabled={
+                        !selectedCharacter ||
+                        !selectedMotionImage ||
+                        !motionVideo ||
+                        motionVideoDuration === null ||
+                        !motionDurationSupported ||
+                        submittingMotion
+                      }
+                    >
+                      {submittingMotion ? <IconLoader2 className="size-5 animate-spin" /> : null}
+                      {submittingMotion ? "Uploading & queuing…" : "Create motion video"}
+                      {!submittingMotion && motionCreditCost ? (
+                        <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
+                          <IconBolt className="size-3.5" fill="currentColor" stroke={1.5} />
+                          {motionCreditCost}
                         </span>
                       ) : null}
                     </Button>

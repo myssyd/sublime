@@ -7,6 +7,7 @@ import { videoPool } from "./jobs"
 import { internal } from "./_generated/api"
 import {
   lipSyncCreditsForDuration,
+  motionControlCreditsForDuration,
   videoCreditsForDuration,
 } from "./billing"
 import { reserveCredits } from "./credits"
@@ -264,6 +265,103 @@ export const internalCreateAndQueue = internalMutation({
     await videoPool.enqueueAction(
       ctx,
       internal.videoGeneration.generateClone,
+      { videoId },
+      { retry: false }
+    )
+    return videoId
+  },
+})
+
+export const internalCreateMotionControlAndQueue = internalMutation({
+  args: {
+    userId: v.string(),
+    characterId: v.id("characters"),
+    characterImage: characterImageSourceValidator,
+    sourceVideoKey: v.string(),
+    sourceFileName: v.string(),
+    sourceDurationSeconds: v.number(),
+    sourceFileSize: v.number(),
+    prompt: v.string(),
+    keepAudio: v.boolean(),
+    characterOrientation: v.union(v.literal("video"), v.literal("image")),
+  },
+  handler: async (ctx, args) => {
+    const character = await ctx.db.get(args.characterId)
+    if (
+      !character ||
+      character.userId !== args.userId ||
+      character.status === "draft" ||
+      !character.primaryImageKey
+    ) {
+      throw new Error("Character not found")
+    }
+    const characterImage = await resolveCharacterImage(ctx, {
+      userId: args.userId,
+      characterId: args.characterId,
+      source: args.characterImage,
+      primaryImageKey: character.primaryImageKey,
+      referenceImageKeys: character.referenceImageKeys,
+    })
+    if (!characterImage) {
+      throw new Error("Selected character image not found")
+    }
+    const maxDuration = args.characterOrientation === "video" ? 30 : 10
+    if (
+      args.sourceDurationSeconds < 3 ||
+      args.sourceDurationSeconds > maxDuration
+    ) {
+      throw new Error(
+        args.characterOrientation === "video"
+          ? "Motion videos must be between 3 and 30 seconds"
+          : "Image-oriented motion videos must be between 3 and 10 seconds"
+      )
+    }
+    if (args.sourceFileSize > 200 * 1024 * 1024) {
+      throw new Error("Motion videos must be smaller than 200 MB")
+    }
+
+    const now = Date.now()
+    const videoId = await ctx.db.insert("videos", {
+      userId: args.userId,
+      characterId: args.characterId,
+      videoKind: "motion_control",
+      characterImageKey: characterImage.key,
+      characterImageId: characterImage.imageId,
+      sourceVideoKey: args.sourceVideoKey,
+      sourceFileName: args.sourceFileName,
+      sourceKind: "upload",
+      sourceDurationSeconds: args.sourceDurationSeconds,
+      sourceFileSize: args.sourceFileSize,
+      prompt: args.prompt.trim(),
+      keepAudio: args.keepAudio,
+      characterOrientation: args.characterOrientation,
+      provider: "fal-kling-v3-standard-motion-control",
+      status: "queued",
+      createdAt: now,
+      updatedAt: now,
+    })
+    await ctx.db.patch(args.characterId, {
+      videoCount: character.videoCount + 1,
+      updatedAt: now,
+    })
+    const creditReservationKey = `motion-control:${videoId}`
+    const credits = motionControlCreditsForDuration(
+      args.sourceDurationSeconds
+    )
+    await reserveCredits(ctx, {
+      userId: args.userId,
+      credits,
+      reservationKey: creditReservationKey,
+      kind: "motion_control",
+      refId: videoId,
+    })
+    await ctx.db.patch(videoId, {
+      creditReservationKey,
+      creditsCharged: credits,
+    })
+    await videoPool.enqueueAction(
+      ctx,
+      internal.videoGeneration.generateMotionControl,
       { videoId },
       { retry: false }
     )

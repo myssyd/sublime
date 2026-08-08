@@ -278,6 +278,8 @@ export default function CharacterDetailPage() {
                         ? item.prompt || "Generated photo"
                         : item.videoKind === "lip_sync"
                           ? "Lip sync"
+                          : item.videoKind === "motion_control"
+                            ? item.prompt || "Motion control"
                           : item.prompt || "Reel clone"}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">

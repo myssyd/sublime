@@ -54,6 +54,7 @@ export const CHARACTER_IMAGE_CREDITS = 10
 export const NANO_BANANA_IMAGE_CREDITS = 5
 export const SEEDREAM_IMAGE_CREDITS = 10
 export const KLING_VIDEO_CREDITS_PER_SECOND = 20
+export const MOTION_CONTROL_CREDITS_PER_SECOND = 20
 export const SEEDANCE_2_VIDEO_CREDITS_PER_SECOND = 35
 export const SEEDANCE_2_5_VIDEO_CREDITS_PER_SECOND = 70
 export const LIP_SYNC_CREDITS_PER_SECOND = 10
@@ -79,6 +80,10 @@ export function videoCreditsForDuration(
 
 export function lipSyncCreditsForDuration(durationSeconds: number) {
   return Math.ceil(durationSeconds) * LIP_SYNC_CREDITS_PER_SECOND
+}
+
+export function motionControlCreditsForDuration(durationSeconds: number) {
+  return Math.ceil(durationSeconds) * MOTION_CONTROL_CREDITS_PER_SECOND
 }
 
 export function getAnnualCredits(plan: PlanMeta) {

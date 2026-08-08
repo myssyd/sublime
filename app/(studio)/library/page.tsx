@@ -75,6 +75,12 @@ function modelLabel(model: PhotoItem["model"]) {
   return "Generated photo"
 }
 
+function videoKindLabel(kind: "reel_clone" | "motion_control" | "lip_sync" | undefined) {
+  if (kind === "lip_sync") return "Lip Sync"
+  if (kind === "motion_control") return "Motion Control"
+  return "Reel Clone"
+}
+
 export default function LibraryPage() {
   const searchParams = useSearchParams()
   const characters = useQuery(api.characters.list)
@@ -436,7 +442,7 @@ export default function LibraryPage() {
                         {item.characterName}
                       </p>
                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                        {item.videoKind === "lip_sync" ? "Lip Sync" : "Reel Clone"} · {formatDate(item.createdAt)}
+                        {videoKindLabel(item.videoKind)} · {formatDate(item.createdAt)}
                       </p>
                       {item.error ? (
                         <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-destructive">

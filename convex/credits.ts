@@ -19,7 +19,11 @@ type LedgerReason =
   | "refund"
   | "expiry"
 
-type UsageOperation = "character_image" | "video_clone" | "lip_sync"
+type UsageOperation =
+  | "character_image"
+  | "video_clone"
+  | "motion_control"
+  | "lip_sync"
 
 export function availableBalances(sub: {
   subscriptionBalance: number
@@ -442,6 +446,7 @@ export const recordProviderSuccess = internalMutation({
     operation: v.union(
       v.literal("character_image"),
       v.literal("video_clone"),
+      v.literal("motion_control"),
       v.literal("lip_sync")
     ),
     model: v.string(),
@@ -488,6 +493,7 @@ export const recordProviderFailure = internalMutation({
     operation: v.union(
       v.literal("character_image"),
       v.literal("video_clone"),
+      v.literal("motion_control"),
       v.literal("lip_sync")
     ),
     model: v.string(),
@@ -528,6 +534,28 @@ export const recordProviderFailure = internalMutation({
       createdAt: Date.now(),
     })
   },
+})
+
+export const recordUnbilledProviderUsage = internalMutation({
+  args: {
+    userId: v.string(),
+    operation: v.union(
+      v.literal("character_intent"),
+      v.literal("picture_intent")
+    ),
+    provider: v.literal("openrouter"),
+    model: v.string(),
+    status: v.union(v.literal("completed"), v.literal("failed")),
+    providerRequestId: v.optional(v.string()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
+    elapsedMs: v.number(),
+  },
+  handler: async (ctx, args) =>
+    await ctx.db.insert("usage", {
+      ...args,
+      createdAt: Date.now(),
+    }),
 })
 
 export const linkStripeCustomer = internalMutation({

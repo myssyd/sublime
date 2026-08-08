@@ -18,6 +18,8 @@ const VIDEO_MODEL_ENDPOINTS: Record<VideoModel, string> = {
   "seedance-2.5": "bytedance/seedance-2.5/reference-to-video",
 }
 const LIP_SYNC_MODEL = "fal-ai/sync-lipsync/v3/image-to-video"
+const MOTION_CONTROL_MODEL =
+  "fal-ai/kling-video/v3/standard/motion-control"
 const FFMPEG_METADATA_MODEL = "fal-ai/ffmpeg-api/metadata"
 const FFMPEG_SCALE_MODEL = "fal-ai/workflow-utilities/scale-video"
 const FFMPEG_MERGE_AUDIO_MODEL = "fal-ai/ffmpeg-api/merge-audio-video"
@@ -311,6 +313,114 @@ export const generateClone = internalAction({
           reservationKey,
           operation: "video_clone",
           model: modelEndpoint,
+          elapsedMs: Date.now() - startedAt,
+          reason: message,
+        })
+      }
+      await ctx.runMutation(internal.videos.internalFail, {
+        videoId: args.videoId,
+        error: message,
+        elapsedMs: Date.now() - startedAt,
+      })
+      throw error
+    }
+  },
+})
+
+export const generateMotionControl = internalAction({
+  args: { videoId: v.id("videos") },
+  handler: async (ctx, args) => {
+    const startedAt = Date.now()
+    let providerSucceeded = false
+    let reservationKey: string | undefined
+    await ctx.runMutation(internal.videos.internalSetProcessing, {
+      videoId: args.videoId,
+    })
+
+    try {
+      const apiKey = process.env.FAL_KEY
+      if (!apiKey) throw new Error("FAL_KEY is not configured")
+      fal.config({ credentials: apiKey })
+
+      const { video, character } = await ctx.runQuery(
+        internal.videos.internalGetGenerationContext,
+        { videoId: args.videoId }
+      )
+      reservationKey = video.creditReservationKey
+      if (!reservationKey) {
+        throw new Error("Motion Control credit reservation is missing")
+      }
+      if (!video.sourceVideoKey) {
+        throw new Error("Motion reference video is missing")
+      }
+      const characterImageKey =
+        video.characterImageKey ?? character.primaryImageKey
+      if (!characterImageKey) {
+        throw new Error("Character image is missing")
+      }
+
+      const [imageUrl, sourceVideoUrl] = await Promise.all([
+        r2.getUrl(characterImageKey, { expiresIn: 60 * 60 }),
+        r2.getUrl(video.sourceVideoKey, { expiresIn: 60 * 60 }),
+      ])
+      const result = (await fal.subscribe(MOTION_CONTROL_MODEL, {
+        input: {
+          image_url: imageUrl,
+          video_url: sourceVideoUrl,
+          character_orientation: video.characterOrientation ?? "video",
+          keep_original_sound: video.keepAudio,
+          ...(video.prompt ? { prompt: video.prompt } : {}),
+        },
+        logs: true,
+      })) as VideoGenerationResult
+      const outputUrl = result.data?.video?.url ?? null
+      if (!outputUrl) {
+        throw new Error("Motion Control returned no output video")
+      }
+
+      await ctx.runMutation(internal.credits.recordProviderSuccess, {
+        reservationKey,
+        operation: "motion_control",
+        model: MOTION_CONTROL_MODEL,
+        providerRequestId: result.requestId,
+        elapsedMs: Date.now() - startedAt,
+      })
+      providerSucceeded = true
+      await ctx.runMutation(internal.videos.internalMarkProviderSuccess, {
+        videoId: args.videoId,
+        providerRequestId: result.requestId,
+        providerOutputUrl: outputUrl,
+      })
+
+      const response = await fetch(outputUrl)
+      if (!response.ok) {
+        throw new Error(
+          `Could not download Motion Control output (${response.status})`
+        )
+      }
+      const blob = await response.blob()
+      const sourceDirectory = video.sourceVideoKey.match(
+        /^(users\/[^/]+\/videos\/[^/]+)\/source\//
+      )?.[1]
+      const outputVideoKey = await r2.store(ctx, blob, {
+        key: `${sourceDirectory ?? `users/${video.userId}/videos/${args.videoId}`}/output/${crypto.randomUUID()}.mp4`,
+        type: blob.type || "video/mp4",
+        cacheControl: "public, max-age=31536000, immutable",
+      })
+
+      await ctx.runMutation(internal.videos.internalComplete, {
+        videoId: args.videoId,
+        outputVideoKey,
+        providerRequestId: result.requestId,
+        elapsedMs: Date.now() - startedAt,
+      })
+    } catch (error) {
+      const message = errorMessage(error).slice(0, 1500)
+      if (!providerSucceeded && reservationKey) {
+        await ctx.runMutation(internal.credits.recordProviderFailure, {
+          reservationKey,
+          operation: "motion_control",
+          model: MOTION_CONTROL_MODEL,
           elapsedMs: Date.now() - startedAt,
           reason: message,
         })

@@ -16,6 +16,27 @@ import {
   type PictureAspectRatio,
   type PictureModel,
 } from "./lib/image"
+import {
+  buildCharacterIntentUserMessage,
+  characterIntentResponseFormat,
+  characterIntentSchema,
+  CHARACTER_INTENT_SYSTEM_PROMPT,
+  CHARACTER_INTENT_VERSION,
+  renderFullBodyCharacterIntent,
+  renderHeroCharacterIntent,
+  type CharacterIntent,
+} from "./lib/characterIntent"
+import {
+  buildPictureDirectorContent,
+  buildPictureProviderPrompt,
+  hasCompleteReferencePlan,
+  PICTURE_DIRECTOR_SYSTEM_PROMPT,
+  PICTURE_INTENT_VERSION,
+  pictureIntentResponseFormat,
+  pictureIntentSchema,
+  type PictureIntent,
+} from "./lib/pictureIntent"
+import { callTerraStructured, TERRA_MODEL } from "./lib/terra"
 
 const SEEDREAM_TEXT_MODEL = "bytedance/seedream/v5/pro/text-to-image"
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit"
@@ -65,6 +86,76 @@ function configureFal() {
   const apiKey = process.env.FAL_KEY
   if (!apiKey) throw new Error("FAL_KEY is not configured")
   fal.config({ credentials: apiKey })
+}
+
+async function interpretCharacterIntent(
+  ctx: ActionCtx,
+  args: {
+    userId: string
+    sourceKind: "prompt" | "image"
+    sourcePrompt?: string
+    previousIntent?: CharacterIntent
+    adjustment?: string
+  }
+): Promise<CharacterIntent> {
+  try {
+    const intent = await callTerraStructured(ctx, {
+      userId: args.userId,
+      operation: "character_intent",
+      systemPrompt: CHARACTER_INTENT_SYSTEM_PROMPT,
+      userContent: buildCharacterIntentUserMessage(args),
+      responseFormat: characterIntentResponseFormat,
+      schema: characterIntentSchema,
+      maxCompletionTokens: 1_200,
+      errorLabel: "Character Intent Director",
+    })
+    if (intent.adultStatus === "minor") {
+      throw new Error("Characters must represent adults who are 18 or older")
+    }
+    return intent
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "Characters must represent adults who are 18 or older"
+    ) {
+      throw error
+    }
+    console.error("[character-intent] Could not prepare prompt", error)
+    throw new Error("Could not prepare the character description. Please try again.")
+  }
+}
+
+async function directPicture(
+  ctx: ActionCtx,
+  args: {
+    userId: string
+    rawPrompt: string
+    characterName: string
+    characterIdentityPrompt?: string
+    model: PictureModel
+    aspectRatio: PictureAspectRatio
+    attachmentUrls: string[]
+  }
+): Promise<PictureIntent> {
+  try {
+    const intent = await callTerraStructured(ctx, {
+      userId: args.userId,
+      operation: "picture_intent",
+      systemPrompt: PICTURE_DIRECTOR_SYSTEM_PROMPT,
+      userContent: buildPictureDirectorContent(args),
+      responseFormat: pictureIntentResponseFormat,
+      schema: pictureIntentSchema,
+      maxCompletionTokens: 2_000,
+      errorLabel: "Picture Director",
+    })
+    if (!hasCompleteReferencePlan(intent, args.attachmentUrls.length)) {
+      throw new Error("Picture Director returned an incomplete reference plan")
+    }
+    return intent
+  } catch (error) {
+    console.error("[picture-director] Could not prepare prompt", error)
+    throw new Error("Could not prepare the picture direction. Please try again.")
+  }
 }
 
 function isOwnedPictureReferenceKey(userId: string, key: string) {
@@ -229,7 +320,7 @@ COMPOSITION AND CAMERA
 - Keep the entire head, hair, neck, and shoulders inside frame. Make the face large enough to inspect at a glance.
 
 STYLING
-Present an unmistakably adult, polished contemporary creator with intentional but believable grooming and simple fashion-forward clothing without visible logos. Styling should support the person's identity rather than overpower it. User direction about body type, clothing, styling, disability, cultural dress, or modesty always overrides defaults.
+Follow the character concept, stable presentation, and canonical wardrobe when supplied. Otherwise use simple, neutral clothing and believable grooming without visible logos. Do not add glamour, sex appeal, trend-driven styling, costume, makeup, or accessories that the user did not request. User direction about body type, clothing, styling, disability, cultural dress, or modesty always overrides defaults.
 
 FINAL REJECTION RULES
 Reject any result with a generic beauty-filter face, identity ambiguity, doll-like skin, excessive symmetry, smeared or glassy eyes, malformed ears or teeth, duplicate features, cropped hair or head, dramatic colored lighting, extreme expression, sunglasses, hats, face obstruction, text, lettering, logo, watermark, border, or more than one person.${adjustment}`
@@ -253,7 +344,7 @@ TASK AND COMPOSITION
 - Match the hero's neutral studio lighting, white balance, skin response, and background so the two images feel captured in the same real photoshoot.
 
 STYLING
-Extend the hero's styling into one coherent, tasteful, fashion-forward full look with physically realistic fabric, seams, folds, and contact shadows. Keep the requested body type; do not force an idealized physique. User direction about body shape, outfit, cultural dress, disability, styling, or modesty always overrides defaults.${override}
+Extend the hero's styling into one coherent full look with physically realistic fabric, seams, folds, and contact shadows. Follow any supplied character concept or canonical wardrobe; otherwise keep the clothing simple and neutral. Keep the requested body type; do not force an idealized physique or add unrequested glamour, sex appeal, costume, makeup, or accessories. User direction about body shape, outfit, cultural dress, disability, styling, or modesty always overrides defaults.${override}
 
 FINAL REJECTION RULES
 Reject any result with identity drift, a generic or altered face, doll-like skin, a different apparent age, cropped head or feet, hidden hands, fused fingers, extra limbs, broken joints, impossible posture, distorted proportions, floating clothing, text, logo, watermark, props, sunglasses, hat, face obstruction, or more than one person.`
@@ -290,8 +381,36 @@ export const generateHeroJob = internalAction({
     ) {
       throw new Error("Character draft not found")
     }
-    configureFal()
     try {
+      const reusableIntent =
+        character.intentVersion === CHARACTER_INTENT_VERSION
+          ? character.characterIntent
+          : undefined
+      const shouldInterpret = Boolean(
+        args.adjustment?.trim() ||
+          (!reusableIntent &&
+            (character.sourceKind === "prompt" || character.sourcePrompt?.trim()))
+      )
+      const characterIntent = shouldInterpret
+        ? await interpretCharacterIntent(ctx, {
+            userId: args.userId,
+            sourceKind: character.sourceKind,
+            sourcePrompt: character.sourcePrompt,
+            previousIntent: reusableIntent,
+            adjustment: args.adjustment,
+          })
+        : reusableIntent
+      if (characterIntent && characterIntent !== reusableIntent) {
+        await ctx.runMutation(internal.characters.internalSaveCharacterIntent, {
+          id: args.characterId,
+          userId: args.userId,
+          intent: characterIntent,
+          model: TERRA_MODEL,
+          version: CHARACTER_INTENT_VERSION,
+        })
+      }
+
+      configureFal()
       const referenceUrls = await Promise.all(
         (character.sourceImageKeys ?? []).map((key) =>
           r2.getUrl(key, { expiresIn: 60 * 60 })
@@ -305,8 +424,10 @@ export const generateHeroJob = internalAction({
         refId: args.characterId,
         prompt: heroPrompt({
           sourceKind: character.sourceKind,
-          sourcePrompt: character.sourcePrompt,
-          adjustment: args.adjustment,
+          sourcePrompt: characterIntent
+            ? renderHeroCharacterIntent(characterIntent)
+            : character.sourcePrompt,
+          adjustment: characterIntent ? undefined : args.adjustment,
         }),
         referenceUrls,
         model: "nano-banana",
@@ -352,8 +473,8 @@ export const generateReferencePackJob = internalAction({
     ) {
       throw new Error("Approve a hero first")
     }
-    configureFal()
     try {
+      configureFal()
       const heroUrl = await r2.getUrl(character.primaryImageKey, {
         expiresIn: 60 * 60,
       })
@@ -363,7 +484,11 @@ export const generateReferencePackJob = internalAction({
         credits: CHARACTER_IMAGE_CREDITS,
         kind: "character_reference",
         refId: `${args.characterId}:full-body`,
-        prompt: fullBodyPrompt(character.sourcePrompt),
+        prompt: fullBodyPrompt(
+          character.characterIntent
+            ? renderFullBodyCharacterIntent(character.characterIntent)
+            : character.sourcePrompt
+        ),
         referenceUrls: [heroUrl],
         model: "nano-banana",
         identityQuality: true,
@@ -448,31 +573,49 @@ export const generateCreation = action({
         throw new Error("Character not found")
       }
 
-      configureFal()
-      const referenceKeys = [
+      const identityReferenceKeys = [
         character.primaryImageKey,
         ...character.referenceImageKeys,
-        ...args.attachmentImageKeys,
       ]
-      const referenceUrls = await Promise.all(
-        referenceKeys.map((key) => r2.getUrl(key, { expiresIn: 60 * 60 }))
-      )
+      const [identityReferenceUrls, attachmentUrls] = await Promise.all([
+        Promise.all(
+          identityReferenceKeys.map((key) =>
+            r2.getUrl(key, { expiresIn: 60 * 60 })
+          )
+        ),
+        Promise.all(
+          args.attachmentImageKeys.map((key) =>
+            r2.getUrl(key, { expiresIn: 60 * 60 })
+          )
+        ),
+      ])
+      const pictureIntent = await directPicture(ctx, {
+        userId: user._id,
+        rawPrompt: prompt,
+        characterName: character.name,
+        characterIdentityPrompt: character.identityPrompt,
+        model: args.model,
+        aspectRatio: args.aspectRatio,
+        attachmentUrls,
+      })
+      const providerPrompt = buildPictureProviderPrompt({
+        rawPrompt: prompt,
+        aspectRatio: args.aspectRatio,
+        identityReferenceCount: identityReferenceUrls.length,
+        intent: pictureIntent,
+      })
+
+      configureFal()
       const generated = await generateBilledImage(ctx, {
         userId: user._id,
         reservationKey: `creation-image:${args.characterId}:${crypto.randomUUID()}`,
         credits: imageCreditsForModel(args.model),
         kind: "creation_image",
         refId: args.characterId,
-        referenceUrls,
+        referenceUrls: [...identityReferenceUrls, ...attachmentUrls],
         model: args.model,
         aspectRatio: args.aspectRatio,
-        prompt: `Create a new photorealistic ${args.aspectRatio} social photo of the EXACT SAME PERSON shown in the supplied identity references. Preserve their recognizable facial identity, facial proportions, skin tone, hair, age, build, and distinctive features exactly.
-
-Creative direction: ${prompt}
-
-Any additional supplied images after the identity references are creative references for outfit, styling, props, pose, setting, or composition. Preserve the selected character's identity; do not adopt another person's face or body identity from those creative references.
-
-Make the result feel like a polished, believable Instagram post with natural photographic detail and intentional composition. One person only unless the creative direction explicitly asks otherwise. No text, lettering, watermark, border, duplicate face, distorted anatomy, or identity drift.`,
+        prompt: providerPrompt,
       })
       const imageKey = await storeGeneratedImage(
         ctx,
@@ -485,6 +628,10 @@ Make the result feel like a polished, believable Instagram post with natural pho
           userId: user._id,
           key: imageKey,
           prompt,
+          pictureIntent,
+          directorModel: TERRA_MODEL,
+          directorVersion: PICTURE_INTENT_VERSION,
+          providerPrompt,
           model: args.model,
           aspectRatio: args.aspectRatio,
         })

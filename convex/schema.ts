@@ -4,6 +4,8 @@ import {
   pictureAspectRatioValidator,
   pictureModelValidator,
 } from "./lib/image"
+import { characterIntentValidator } from "./lib/characterIntent"
+import { pictureIntentValidator } from "./lib/pictureIntent"
 import { videoModelValidator } from "./lib/videoModel"
 
 export default defineSchema({
@@ -17,6 +19,9 @@ export default defineSchema({
     status: v.optional(v.union(v.literal("draft"), v.literal("ready"))),
     sourceKind: v.optional(v.union(v.literal("prompt"), v.literal("image"))),
     sourcePrompt: v.optional(v.string()),
+    characterIntent: v.optional(characterIntentValidator),
+    intentModel: v.optional(v.string()),
+    intentVersion: v.optional(v.number()),
     sourceImageKeys: v.optional(v.array(v.string())),
     heroCandidateKeys: v.optional(v.array(v.string())),
     imageCount: v.number(),
@@ -34,6 +39,10 @@ export default defineSchema({
     characterId: v.id("characters"),
     key: v.string(),
     prompt: v.string(),
+    pictureIntent: v.optional(pictureIntentValidator),
+    directorModel: v.optional(v.string()),
+    directorVersion: v.optional(v.number()),
+    providerPrompt: v.optional(v.string()),
     model: pictureModelValidator,
     aspectRatio: pictureAspectRatioValidator,
     createdAt: v.number(),
@@ -49,7 +58,11 @@ export default defineSchema({
     userId: v.string(),
     characterId: v.id("characters"),
     videoKind: v.optional(
-      v.union(v.literal("reel_clone"), v.literal("lip_sync"))
+      v.union(
+        v.literal("reel_clone"),
+        v.literal("motion_control"),
+        v.literal("lip_sync")
+      )
     ),
     characterImageKey: v.optional(v.string()),
     characterImageId: v.optional(v.id("images")),
@@ -65,11 +78,15 @@ export default defineSchema({
     sourceFileSize: v.optional(v.number()),
     prompt: v.string(),
     keepAudio: v.boolean(),
+    characterOrientation: v.optional(
+      v.union(v.literal("video"), v.literal("image"))
+    ),
     model: v.optional(videoModelValidator),
     provider: v.union(
       v.literal("fal-kling-o3-pro"),
       v.literal("fal-seedance-2.0-fast"),
       v.literal("fal-seedance-2.5"),
+      v.literal("fal-kling-v3-standard-motion-control"),
       v.literal("fal-sync-lipsync-v3")
     ),
     status: v.union(
@@ -115,13 +132,18 @@ export default defineSchema({
     userId: v.string(),
     operation: v.union(
       v.literal("video_clone"),
+      v.literal("motion_control"),
       v.literal("lip_sync"),
-      v.literal("character_image")
+      v.literal("character_image"),
+      v.literal("character_intent"),
+      v.literal("picture_intent")
     ),
-    provider: v.literal("fal"),
+    provider: v.union(v.literal("fal"), v.literal("openrouter")),
     model: v.string(),
     status: v.union(v.literal("completed"), v.literal("failed")),
     providerRequestId: v.optional(v.string()),
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
     creditsCharged: v.optional(v.number()),
     creditRateVersion: v.optional(v.number()),
     billingStatus: v.optional(

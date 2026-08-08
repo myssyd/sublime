@@ -6,6 +6,7 @@ import {
   pictureAspectRatioValidator,
   pictureModelValidator,
 } from "./lib/image"
+import { pictureIntentValidator } from "./lib/pictureIntent"
 import {
   internalMutation,
   internalQuery,
@@ -87,6 +88,10 @@ export const internalCreate = internalMutation({
     characterId: v.id("characters"),
     key: v.string(),
     prompt: v.string(),
+    pictureIntent: pictureIntentValidator,
+    directorModel: v.string(),
+    directorVersion: v.number(),
+    providerPrompt: v.string(),
     model: pictureModelValidator,
     aspectRatio: pictureAspectRatioValidator,
   },

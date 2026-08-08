@@ -10,6 +10,10 @@ import {
   mutation,
   query,
 } from "./_generated/server"
+import {
+  characterIntentValidator,
+  renderStoredIdentityPrompt,
+} from "./lib/characterIntent"
 
 const sourceKindValidator = v.union(v.literal("prompt"), v.literal("image"))
 const generationStageValidator = v.union(
@@ -368,6 +372,28 @@ export const internalCompleteHero = internalMutation({
   },
 })
 
+export const internalSaveCharacterIntent = internalMutation({
+  args: {
+    id: v.id("characters"),
+    userId: v.string(),
+    intent: characterIntentValidator,
+    model: v.string(),
+    version: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const character = await ctx.db.get(args.id)
+    if (!character || character.userId !== args.userId) {
+      throw new Error("Character draft not found")
+    }
+    await ctx.db.patch(args.id, {
+      characterIntent: args.intent,
+      intentModel: args.model,
+      intentVersion: args.version,
+      updatedAt: Date.now(),
+    })
+  },
+})
+
 export const internalCompleteReferences = internalMutation({
   args: {
     id: v.id("characters"),
@@ -379,8 +405,10 @@ export const internalCompleteReferences = internalMutation({
     if (!character || character.userId !== args.userId || !character.primaryImageKey) {
       throw new Error("Character draft not found")
     }
-    const identityLock = character.sourcePrompt?.trim()
-      ? `Character description: ${character.sourcePrompt.trim()}\nThe exact same person shown in the approved reference images. Preserve facial identity, bone structure, skin tone, hair, age, build, and distinctive features in every frame.`
+    const identityLock = character.characterIntent
+      ? renderStoredIdentityPrompt(character.characterIntent)
+      : character.sourcePrompt?.trim()
+        ? `Character description: ${character.sourcePrompt.trim()}\nThe exact same person shown in the approved reference images. Preserve facial identity, bone structure, skin tone, hair, age, build, and distinctive features in every frame.`
       : "The exact same person shown in the approved reference images. Preserve facial identity, bone structure, skin tone, hair, age, build, and distinctive features in every frame."
     await ctx.db.patch(args.id, {
       identityPrompt: identityLock,

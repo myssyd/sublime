@@ -7,7 +7,7 @@ Sublime is an AI character studio for building reusable virtual characters and c
 - Next.js 16, React 19, TypeScript
 - Convex with Better Auth, R2, and Workpool components
 - Stripe subscriptions, prepaid top-ups, and an auditable Convex credit ledger
-- Seedream 5 Pro character generation plus Kling O3 Pro and Seedance video cloning through fal.ai
+- Seedream 5 Pro character generation plus Kling and Seedance video tools through fal.ai
 - Tailwind CSS 4 and shadcn-compatible UI primitives
 - Bun for all package and script commands
 
@@ -42,7 +42,8 @@ subscribers can add 600 non-expiring credits for $15.
 Credit rates are centralized in `convex/billing.ts`: Nano Banana photos cost 5,
 Seedream photos cost 10, complete three-image character builds cost 30, and
 video clones cost 20 credits per rounded-up source second with Kling O3 Pro,
-35 with Seedance 2.0 Fast, or 70 with Seedance 2.5. Credits
+35 with Seedance 2.0 Fast, or 70 with Seedance 2.5. Kling V3 Standard Motion
+Control costs 20 credits per rounded-up reference second. Credits
 are reserved before a provider call, charged once the provider succeeds, and
 released on provider failure. Subscription credits are spent before top-up
 credits and unused subscription credits expire at renewal; top-up credits do
@@ -65,7 +66,7 @@ bunx vercel --prod
 ## Product areas
 
 - `/characters` guides users from a prompt or source photos through hero approval and a Seedream-generated Kling reference pack.
-- `/create` combines a character with an uploaded video or public Instagram Reel and queues a Kling or Seedance video-to-video clone.
+- `/create` creates pictures, clones uploaded videos or public Instagram Reels, transfers motion with Kling V3 Standard, and lip-syncs characters.
 - `/library` tracks queued, generating, completed, and failed clones.
 - `/billing` handles paid plans, top-ups, credit balance, and the customer portal.
 - `/settings` manages the signed-in account and app appearance.
