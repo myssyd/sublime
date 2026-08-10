@@ -65,8 +65,18 @@ export function CharactersExperience({
   onOpenChange,
   onCreated,
 }: CharactersExperienceProps) {
+  const [activeDraftId, setActiveDraftId] =
+    useState<Id<"characters"> | null>(null);
+  const [creatingNew, setCreatingNew] = useState(false);
   const characters = useQuery(api.characters.list);
-  const draft = useQuery(api.characters.getDraft);
+  const drafts = useQuery(
+    api.characters.listDrafts,
+    standalone ? {} : "skip",
+  );
+  const draft = useQuery(
+    api.characters.getDraft,
+    creatingNew ? "skip" : { id: activeDraftId ?? undefined },
+  );
   const createDraft = useMutation(api.characters.createDraft);
   const approveHero = useMutation(api.characters.approveHero);
   const queueHero = useMutation(api.characters.queueHero);
@@ -76,6 +86,10 @@ export function CharactersExperience({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sourceImagesRef = useRef<SourceImage[]>([]);
   const dialogClosedWithEscapeRef = useRef(false);
+  const promptServerRef = useRef<{
+    draftId: string | null;
+    value: string;
+  }>({ draftId: null, value: "" });
 
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [sourceKind, setSourceKind] = useState<SourceKind | null>(null);
@@ -83,7 +97,8 @@ export function CharactersExperience({
   const [description, setDescription] = useState("");
   const [sourceImages, setSourceImages] = useState<SourceImage[]>([]);
   const [selectedHeroKey, setSelectedHeroKey] = useState("");
-  const [adjustment, setAdjustment] = useState("");
+  const [characterPrompt, setCharacterPrompt] = useState("");
+  const [promptBaseline, setPromptBaseline] = useState("");
   const [workingStage, setWorkingStage] = useState<WorkingStage | null>(null);
   const completingCharacterRef = useRef<CompletingCharacter | null>(null);
   const working = workingStage !== null;
@@ -108,6 +123,20 @@ export function CharactersExperience({
   )
     ? selectedHeroKey
     : (draft?.heroCandidateKeys?.at(-1) ?? "");
+  const promptDirty = characterPrompt.trim() !== promptBaseline.trim();
+
+  useEffect(() => {
+    if (draft === undefined) return;
+    const draftId = draft?._id ?? null;
+    const serverPrompt = draft?.sourcePrompt ?? "";
+    const previous = promptServerRef.current;
+    if (previous.draftId === draftId && previous.value === serverPrompt) {
+      return;
+    }
+    promptServerRef.current = { draftId, value: serverPrompt };
+    setCharacterPrompt(serverPrompt);
+    setPromptBaseline(serverPrompt);
+  }, [draft]);
 
   useEffect(
     () => () => {
@@ -172,7 +201,6 @@ export function CharactersExperience({
     setDescription("");
     clearSourceImages();
     setSelectedHeroKey("");
-    setAdjustment("");
   }
 
   function chooseFiles(list: FileList | null) {
@@ -234,12 +262,14 @@ export function CharactersExperience({
               ),
             )
           : [];
-      await createDraft({
+      const characterId = await createDraft({
         name: name.trim(),
         sourceKind,
         sourcePrompt: description.trim() || undefined,
         sourceImageKeys,
       });
+      setActiveDraftId(characterId);
+      setCreatingNew(false);
       track("generation_requested", {
         kind: "character_hero",
         source_kind: sourceKind,
@@ -261,18 +291,21 @@ export function CharactersExperience({
 
   async function retryHero(characterId: Id<"characters">) {
     if (working) return;
+    const updatedPrompt = promptDirty
+      ? characterPrompt.trim() || null
+      : undefined;
+    if (promptDirty && draft?.sourceKind === "prompt" && !updatedPrompt) return;
     setWorkingStage("hero");
     try {
       track("generation_requested", {
         kind: "character_hero",
         retry: true,
-        has_adjustment: Boolean(adjustment.trim()),
+        has_prompt_edits: promptDirty,
       });
       await queueHero({
         id: characterId,
-        adjustment: adjustment.trim() || undefined,
+        updatedPrompt,
       });
-      setAdjustment("");
     } catch (error) {
       track("generation_failed", {
         kind: "character_hero",
@@ -350,6 +383,8 @@ export function CharactersExperience({
     if (draft) {
       await discardDraft({ id: draft._id });
     }
+    setActiveDraftId(null);
+    setCreatingNew(true);
     resetLocalBuilder();
     completingCharacterRef.current = null;
     setBuilderOpen(true);
@@ -365,14 +400,32 @@ export function CharactersExperience({
   const selectedHero = heroCandidates.find(
     (candidate) => candidate.key === effectiveSelectedHeroKey,
   );
-  const showHeaderAction = Boolean(draft) || Boolean(characters?.length);
+  const showHeaderAction =
+    Boolean(drafts?.length) || Boolean(characters?.length);
   const screenKey = draft
     ? heroSelected || buildingReferences
       ? "references"
       : "hero"
     : (sourceKind ?? "source");
 
-  function openBuilder() {
+  function openLatestDraft() {
+    setActiveDraftId(null);
+    setCreatingNew(false);
+    setSelectedHeroKey("");
+    setBuilderOpen(true);
+  }
+
+  function openNewBuilder() {
+    setActiveDraftId(null);
+    setCreatingNew(true);
+    resetLocalBuilder();
+    setBuilderOpen(true);
+  }
+
+  function openDraft(draftId: Id<"characters">) {
+    setActiveDraftId(draftId);
+    setCreatingNew(false);
+    setSelectedHeroKey("");
     setBuilderOpen(true);
   }
 
@@ -384,14 +437,20 @@ export function CharactersExperience({
           description="Build reusable, Kling-ready identities with Nano Banana 2 portrait and full-body references."
           action={
             showHeaderAction ? (
-              <Button size="sm" onClick={openBuilder}>
-                {draft ? (
-                  <IconArrowRight className="size-4" />
-                ) : (
-                  <IconPlus className="size-4" />
-                )}
-                {draft ? "Continue draft" : "New character"}
-              </Button>
+              <div className="flex items-center gap-2">
+                {drafts?.length ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openLatestDraft}
+                  >
+                    <IconArrowRight className="size-4" /> Continue latest
+                  </Button>
+                ) : null}
+                <Button size="sm" onClick={openNewBuilder}>
+                  <IconPlus className="size-4" /> New character
+                </Button>
+              </div>
             ) : undefined
           }
           mobileAction={
@@ -399,16 +458,10 @@ export function CharactersExperience({
               <Button
                 size="icon"
                 className="size-12 rounded-full shadow-lg shadow-black/20"
-                aria-label={
-                  draft ? "Continue character draft" : "New character"
-                }
-                onClick={openBuilder}
+                aria-label="New character"
+                onClick={openNewBuilder}
               >
-                {draft ? (
-                  <IconArrowRight className="size-4" />
-                ) : (
-                  <IconPlus className="size-4" />
-                )}
+                <IconPlus className="size-4" />
               </Button>
             ) : undefined
           }
@@ -427,7 +480,6 @@ export function CharactersExperience({
           onOpenChange={(open, eventDetails) => {
             dialogClosedWithEscapeRef.current =
               !open && eventDetails.reason === "escape-key";
-            if (!open && draft) toast.message("Your character draft is saved");
             setBuilderOpen(open);
           }}
         >
@@ -855,23 +907,23 @@ export function CharactersExperience({
                   </div>
                 ) : (
                   <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    <div className="flex min-h-80 items-center justify-center overflow-hidden rounded-2xl bg-muted/30">
+                    <div className="flex h-[min(480px,calc(100dvh-10rem))] min-h-80 items-center justify-center overflow-hidden rounded-2xl bg-muted/30">
                       {selectedHero?.url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={selectedHero.url}
                           alt="Generated hero candidate"
-                          className="h-full max-h-[660px] w-full object-contain"
+                          className="size-full object-contain"
                         />
                       ) : generatingHero ? (
-                        <div className="text-center text-muted-foreground">
-                          <IconLoader2 className="mx-auto size-6 animate-spin" />
-                          <p className="mt-3 text-sm">
-                            Nano Banana 2 is creating the hero…
-                          </p>
-                          <p className="mt-1 text-xs">
-                            Draft saved. You can leave and return anytime.
-                          </p>
+                        <div
+                          role="status"
+                          aria-label="Generating hero image"
+                          className="relative aspect-[4/5] h-full max-w-full overflow-hidden bg-muted animate-pulse motion-reduce:animate-none"
+                        >
+                          <span className="sr-only">
+                            Generating hero image…
+                          </span>
                         </div>
                       ) : (
                         <div className="text-center text-muted-foreground">
@@ -894,11 +946,40 @@ export function CharactersExperience({
                       <h3 className="mt-3 text-xl font-semibold">
                         Approve the hero
                       </h3>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        This face becomes the primary reference for every Kling
-                        video. Check the eyes, hair, age, and overall likeness
-                        carefully.
-                      </p>
+
+                      <label className="mt-4 block space-y-2">
+                        <span className="flex items-center justify-between gap-3 text-xs font-medium">
+                          <span>
+                            {draft.sourceKind === "image"
+                              ? "Direction"
+                              : "Prompt"}
+                            {draft.sourceKind === "image" ? (
+                              <span className="font-normal text-muted-foreground">
+                                {" "}(optional)
+                              </span>
+                            ) : null}
+                          </span>
+                          {promptDirty ? (
+                            <span className="font-normal text-primary">
+                              Edited
+                            </span>
+                          ) : null}
+                        </span>
+                        <Textarea
+                          value={characterPrompt}
+                          onChange={(event) =>
+                            setCharacterPrompt(event.target.value)
+                          }
+                          placeholder={
+                            draft.sourceKind === "image"
+                              ? "Add optional direction for this character…"
+                              : undefined
+                          }
+                          className="min-h-32 resize-y text-xs leading-5"
+                          maxLength={2000}
+                          disabled={working || Boolean(draft.generationStage)}
+                        />
+                      </label>
 
                       {heroCandidates.length > 1 ? (
                         <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
@@ -932,30 +1013,29 @@ export function CharactersExperience({
                         </p>
                       ) : null}
 
-                      <div className="mt-auto space-y-3 pt-6">
-                        <Input
-                          value={adjustment}
-                          onChange={(event) =>
-                            setAdjustment(event.target.value)
-                          }
-                          placeholder="Optional: what should change?"
-                          maxLength={240}
-                          disabled={working || Boolean(draft.generationStage)}
-                        />
+                      <div className="mt-5 space-y-3">
                         <Button
                           variant="outline"
                           className="w-full"
                           onClick={() => void retryHero(draft._id)}
-                          disabled={working || Boolean(draft.generationStage)}
+                          disabled={
+                            working ||
+                            Boolean(draft.generationStage) ||
+                            (promptDirty &&
+                              draft.sourceKind === "prompt" &&
+                              !characterPrompt.trim())
+                          }
                         >
                           {generatingHero ? (
                             <IconLoader2 className="size-4 animate-spin" />
                           ) : (
                             <IconRefresh className="size-4" />
                           )}
-                          {heroCandidates.length
-                            ? "Try another"
-                            : "Generate hero"}
+                          {promptDirty
+                            ? "Regenerate with changes"
+                            : heroCandidates.length
+                              ? "Try another"
+                              : "Generate hero"}
                           {!generatingHero ? (
                             <span className="ml-1 flex items-center gap-1 text-xs opacity-80">
                               <IconBolt
@@ -1007,7 +1087,7 @@ export function CharactersExperience({
 
         {standalone ? (
           <section className="animate-in duration-200 fade-in motion-reduce:animate-none">
-            {characters === undefined ? (
+            {characters === undefined || drafts === undefined ? (
               <div
                 role="status"
                 aria-label="Loading characters"
@@ -1024,8 +1104,45 @@ export function CharactersExperience({
                 ))}
                 <span className="sr-only">Loading characters…</span>
               </div>
-            ) : characters.length ? (
+            ) : characters.length || drafts.length ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {drafts.map((character) => (
+                  <article
+                    key={character._id}
+                    className="group relative overflow-hidden rounded-2xl border border-dashed bg-muted transition-colors duration-200 hover:border-primary/50"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openDraft(character._id)}
+                      aria-label={`Continue ${character.name} draft`}
+                      className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    >
+                      <div className="relative aspect-[4/5] overflow-hidden bg-muted">
+                        {character.previewImageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={character.previewImageUrl}
+                            alt=""
+                            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.015] motion-reduce:transform-none"
+                          />
+                        ) : (
+                          <div className="grid size-full place-items-center text-muted-foreground/60">
+                            <IconSparkles className="size-8" stroke={1.5} />
+                          </div>
+                        )}
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                        <div className="absolute inset-x-4 bottom-4 text-white drop-shadow-sm">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                            Draft
+                          </p>
+                          <h3 className="mt-1 truncate text-base font-semibold">
+                            {character.name}
+                          </h3>
+                        </div>
+                      </div>
+                    </button>
+                  </article>
+                ))}
                 {characters.map((character) => (
                   <article
                     key={character._id}
@@ -1062,10 +1179,7 @@ export function CharactersExperience({
                 description="Start with a description or reference photos. Nano Banana 2 will create and normalize the identity images Kling needs."
                 action={
                   <Button
-                    onClick={() => {
-                      resetLocalBuilder();
-                      setBuilderOpen(true);
-                    }}
+                    onClick={openNewBuilder}
                   >
                     <IconPlus className="size-4" /> New character
                   </Button>

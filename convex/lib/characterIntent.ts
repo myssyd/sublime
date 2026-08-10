@@ -87,8 +87,7 @@ Your output is not creative copy. It is the semantic source of truth used to cre
 
 DECISION HIERARCHY
 1. Explicit user intent is authoritative. Preserve every stated visual trait, body trait, presentation choice, wardrobe requirement, cultural detail, disability, and exclusion.
-2. A revision request supersedes only the earlier details it directly changes. Preserve every unrelated earlier lock.
-3. Product defaults may fill true gaps, but must never overwrite or embellish explicit intent.
+2. Product defaults may fill true gaps, but must never overwrite or embellish explicit intent.
 
 INTERPRETATION RULES
 - Separate enduring identity from body, presentation, and wardrobe. Do not blend them into a generic attractive-person summary.
@@ -128,25 +127,13 @@ function listSection(label: string, values: string[]) {
 export function buildCharacterIntentUserMessage(args: {
   sourceKind: "prompt" | "image"
   sourcePrompt?: string
-  previousIntent?: CharacterIntent
-  adjustment?: string
 }) {
-  const lines = [
+  return [
     `SOURCE MODE: ${args.sourceKind === "prompt" ? "text-defined character" : "reference-image character"}`,
     `ORIGINAL USER REQUEST:\n${args.sourcePrompt?.trim() || "(none; visual identity comes from reference images)"}`,
+    "Return the character identity contract. For a reference-image character, describe only traits explicitly supplied in text; the images remain authoritative for all other identity details.",
   ]
-  if (args.previousIntent) {
-    lines.push(
-      `CURRENT IDENTITY CONTRACT:\n${JSON.stringify(args.previousIntent)}`
-    )
-  }
-  if (args.adjustment?.trim()) {
-    lines.push(`REVISION REQUEST:\n${args.adjustment.trim()}`)
-  }
-  lines.push(
-    "Return the updated character identity contract. For a reference-image character, describe only traits explicitly supplied in text; the images remain authoritative for all other identity details."
-  )
-  return lines.join("\n\n")
+    .join("\n\n")
 }
 
 export function renderHeroCharacterIntent(intent: CharacterIntent) {

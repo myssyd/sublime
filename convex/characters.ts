@@ -65,6 +65,36 @@ export const list = query({
   },
 })
 
+export const listDrafts = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authComponent.getAuthUser(ctx)
+    if (!user) return []
+    const characters = await ctx.db
+      .query("characters")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .collect()
+    return characters.flatMap((character) => {
+      if (character.status !== "draft") return []
+      const previewKey =
+        character.primaryImageKey ??
+        character.heroCandidateKeys?.at(-1) ??
+        character.sourceImageKeys?.[0]
+      return [
+        {
+          _id: character._id,
+          name: character.name,
+          generationStage: character.generationStage,
+          generationError: character.generationError,
+          previewImageUrl: previewKey ? publicAssetUrl(previewKey) : null,
+          updatedAt: character.updatedAt,
+        },
+      ]
+    })
+  },
+})
+
 export const getById = query({
   args: { id: v.string() },
   handler: async (ctx, args) => {
@@ -92,17 +122,21 @@ export const getById = query({
 })
 
 export const getDraft = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { id: v.optional(v.id("characters")) },
+  handler: async (ctx, args) => {
     const user = await authComponent.getAuthUser(ctx)
     if (!user) return null
-    const characters = await ctx.db
-      .query("characters")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .order("desc")
-      .collect()
-    const draft = characters.find((character) => character.status === "draft")
-    if (!draft) return null
+    const draft = args.id
+      ? await ctx.db.get(args.id)
+      : await ctx.db
+          .query("characters")
+          .withIndex("by_user", (q) => q.eq("userId", user._id))
+          .order("desc")
+          .filter((q) => q.eq(q.field("status"), "draft"))
+          .first()
+    if (!draft || draft.userId !== user._id || draft.status !== "draft") {
+      return null
+    }
     return {
       ...draft,
       sourceImageUrls: assetUrls(draft.sourceImageKeys ?? []),
@@ -171,16 +205,6 @@ export const createDraft = mutation({
       throw new Error("Source images must be JPG, PNG, or WebP under 15 MB")
     }
 
-    const existing = await ctx.db
-      .query("characters")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect()
-    await Promise.all(
-      existing
-        .filter((character) => character.status === "draft")
-        .map((character) => ctx.db.delete(character._id))
-    )
-
     const now = Date.now()
     const characterId = await ctx.db.insert("characters", {
       userId: user._id,
@@ -248,7 +272,7 @@ export const approveHero = mutation({
 export const queueHero = mutation({
   args: {
     id: v.id("characters"),
-    adjustment: v.optional(v.string()),
+    updatedPrompt: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const user = await authComponent.getAuthUser(ctx)
@@ -263,11 +287,23 @@ export const queueHero = mutation({
       throw new Error("Character draft not found")
     }
     if (character.generationStage) throw new Error("Generation is already running")
-    const adjustment = args.adjustment?.trim() || undefined
-    if (adjustment && adjustment.length > 240) {
-      throw new Error("Adjustment is too long")
+    const promptWasEdited = args.updatedPrompt !== undefined
+    const updatedPrompt = args.updatedPrompt?.trim() || undefined
+    if (updatedPrompt && updatedPrompt.length > 2_000) {
+      throw new Error("Character prompt is too long")
+    }
+    if (promptWasEdited && character.sourceKind === "prompt" && !updatedPrompt) {
+      throw new Error("Character prompt cannot be empty")
     }
     await ctx.db.patch(args.id, {
+      ...(promptWasEdited
+        ? {
+            sourcePrompt: updatedPrompt,
+            characterIntent: undefined,
+            intentModel: undefined,
+            intentVersion: undefined,
+          }
+        : {}),
       generationStage: "hero",
       generationError: undefined,
       updatedAt: Date.now(),
@@ -275,7 +311,10 @@ export const queueHero = mutation({
     await videoPool.enqueueAction(
       ctx,
       internal.characterGeneration.generateHeroJob,
-      { characterId: args.id, userId: user._id, adjustment },
+      {
+        characterId: args.id,
+        userId: user._id,
+      },
       {
         retry: false,
         onComplete: internal.characters.internalGenerationFinished,

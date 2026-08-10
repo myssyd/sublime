@@ -33,17 +33,14 @@ describe("character intent prompt contract", () => {
     )
   })
 
-  test("presents revisions after the current contract", () => {
+  test("passes the user's exact prompt to the intent director", () => {
+    const sourcePrompt = "A woman with shoulder-length dark curls"
     const message = buildCharacterIntentUserMessage({
       sourceKind: "prompt",
-      sourcePrompt: "A woman with shoulder-length dark curls",
-      previousIntent: intent,
-      adjustment: "Make the curls chin-length; keep everything else.",
+      sourcePrompt,
     })
-    expect(message.indexOf("CURRENT IDENTITY CONTRACT")).toBeLessThan(
-      message.indexOf("REVISION REQUEST")
-    )
-    expect(message).toContain("Make the curls chin-length")
+    expect(message).toContain(`ORIGINAL USER REQUEST:\n${sourcePrompt}`)
+    expect(message).not.toContain("CURRENT IDENTITY CONTRACT")
   })
 
   test("builds a provider brief from semantic sections", () => {

@@ -94,8 +94,6 @@ async function interpretCharacterIntent(
     userId: string
     sourceKind: "prompt" | "image"
     sourcePrompt?: string
-    previousIntent?: CharacterIntent
-    adjustment?: string
   }
 ): Promise<CharacterIntent> {
   try {
@@ -289,7 +287,6 @@ Use coherent real-world optics, perspective, depth of field, exposure, shadows, 
 function heroPrompt(args: {
   sourceKind: "prompt" | "image"
   sourcePrompt?: string
-  adjustment?: string
 }) {
   const source =
     args.sourceKind === "image"
@@ -301,9 +298,6 @@ Create one coherent, believable adult person matching this description exactly:
 ${args.sourcePrompt}
 
 Treat every stated physical trait as authoritative. Fill in unstated details conservatively so the person feels genetically and anatomically coherent. Do not substitute a generic influencer face, change the requested ethnicity or apparent age, or erase distinctive traits such as freckles, scars, texture, facial proportions, or body type.`
-  const adjustment = args.adjustment?.trim()
-    ? `\nREVISION REQUEST\n${args.adjustment.trim()}`
-    : ""
   return `${CHARACTER_PHOTOREALISM_STANDARD}
 
 ${source}
@@ -323,7 +317,7 @@ STYLING
 Follow the character concept, stable presentation, and canonical wardrobe when supplied. Otherwise use simple, neutral clothing and believable grooming without visible logos. Do not add glamour, sex appeal, trend-driven styling, costume, makeup, or accessories that the user did not request. User direction about body type, clothing, styling, disability, cultural dress, or modesty always overrides defaults.
 
 FINAL REJECTION RULES
-Reject any result with a generic beauty-filter face, identity ambiguity, doll-like skin, excessive symmetry, smeared or glassy eyes, malformed ears or teeth, duplicate features, cropped hair or head, dramatic colored lighting, extreme expression, sunglasses, hats, face obstruction, text, lettering, logo, watermark, border, or more than one person.${adjustment}`
+Reject any result with a generic beauty-filter face, identity ambiguity, doll-like skin, excessive symmetry, smeared or glassy eyes, malformed ears or teeth, duplicate features, cropped hair or head, dramatic colored lighting, extreme expression, sunglasses, hats, face obstruction, text, lettering, logo, watermark, border, or more than one person.`
 }
 
 function fullBodyPrompt(userDirection?: string) {
@@ -366,7 +360,6 @@ export const generateHeroJob = internalAction({
   args: {
     characterId: v.id("characters"),
     userId: v.string(),
-    adjustment: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ imageKey: string }> => {
     const character = await ctx.runQuery(internal.characters.internalGetOwned, {
@@ -387,17 +380,14 @@ export const generateHeroJob = internalAction({
           ? character.characterIntent
           : undefined
       const shouldInterpret = Boolean(
-        args.adjustment?.trim() ||
-          (!reusableIntent &&
-            (character.sourceKind === "prompt" || character.sourcePrompt?.trim()))
+        !reusableIntent &&
+          (character.sourceKind === "prompt" || character.sourcePrompt?.trim())
       )
       const characterIntent = shouldInterpret
         ? await interpretCharacterIntent(ctx, {
             userId: args.userId,
             sourceKind: character.sourceKind,
             sourcePrompt: character.sourcePrompt,
-            previousIntent: reusableIntent,
-            adjustment: args.adjustment,
           })
         : reusableIntent
       if (characterIntent && characterIntent !== reusableIntent) {
@@ -427,7 +417,6 @@ export const generateHeroJob = internalAction({
           sourcePrompt: characterIntent
             ? renderHeroCharacterIntent(characterIntent)
             : character.sourcePrompt,
-          adjustment: characterIntent ? undefined : args.adjustment,
         }),
         referenceUrls,
         model: "nano-banana",
