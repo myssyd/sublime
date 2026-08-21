@@ -13,7 +13,7 @@ function LoginContent() {
   const searchParams = useSearchParams()
   const { data: session, isPending } = useSession()
   const [signingIn, setSigningIn] = useState(false)
-  const next = searchParams.get("next") || "/create"
+  const next = searchParams.get("next") || "/studio"
 
   useEffect(() => {
     if (!isPending && session) router.replace(next)

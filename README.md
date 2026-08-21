@@ -66,7 +66,7 @@ bunx vercel --prod
 ## Product areas
 
 - `/characters` guides users from a prompt or source photos through hero approval and a Seedream-generated Kling reference pack.
-- `/create` creates pictures, clones uploaded videos or public Instagram Reels, transfers motion with Kling V3 Standard, and lip-syncs characters.
+- `/studio` creates pictures, clones uploaded videos or public Instagram Reels, transfers motion with Kling V3 Standard, and lip-syncs characters.
 - `/library` tracks queued, generating, completed, and failed clones.
 - `/billing` handles paid plans, top-ups, credit balance, and the customer portal.
 - `/settings` manages the signed-in account and app appearance.

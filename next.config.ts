@@ -8,6 +8,15 @@ const POSTHOG_ASSETS_HOST = POSTHOG_HOST.replace(
 )
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/create",
+        destination: "/studio",
+        permanent: true,
+      },
+    ]
+  },
   async rewrites() {
     return [
       {

@@ -86,6 +86,7 @@ export default defineSchema({
       v.literal("fal-kling-o3-pro"),
       v.literal("fal-seedance-2.0-fast"),
       v.literal("fal-seedance-2.5"),
+      v.literal("openrouter-seedance-2.5"),
       v.literal("fal-kling-v3-standard-motion-control"),
       v.literal("fal-sync-lipsync-v3")
     ),

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Dialog } from "@base-ui/react/dialog"
+import { Tooltip } from "@base-ui/react/tooltip"
 import { useAction, usePaginatedQuery, useQuery } from "convex/react"
 import {
   IconActivity,
@@ -112,6 +113,7 @@ type ContentItem =
       status: "queued" | "processing" | "completed" | "failed"
       outputVideoUrl: string | null
       thumbnailUrl: string | null
+      error: string | null
       createdAt: number
     }
 
@@ -122,6 +124,64 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
 ])
+
+function providerErrorMessage(value: unknown) {
+  if (!value || typeof value !== "object") return null
+  const record = value as Record<string, unknown>
+  if (typeof record.message === "string") return record.message
+  if (typeof record.error === "string") return record.error
+  if (record.error && typeof record.error === "object") {
+    const nestedMessage = (record.error as Record<string, unknown>).message
+    if (typeof nestedMessage === "string") return nestedMessage
+  }
+  return null
+}
+
+function readableFailureReason(error: string | null) {
+  let reason = error?.trim() || "The provider did not return a failure reason."
+
+  for (let depth = 0; depth < 2; depth += 1) {
+    const jsonStart = reason.indexOf("{")
+    if (jsonStart === -1) break
+    try {
+      const nestedReason = providerErrorMessage(
+        JSON.parse(reason.slice(jsonStart))
+      )
+      if (!nestedReason) break
+      reason = nestedReason.replace(/^HTTP \d+:\s*/, "")
+    } catch {
+      break
+    }
+  }
+
+  return reason
+}
+
+function FailureBadge({ error }: { error: string | null }) {
+  const reason = readableFailureReason(error)
+
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        delay={150}
+        aria-label={`Failed: ${reason}`}
+        className="absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm outline-none transition-colors hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-white/80"
+      >
+        Failed
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner sideOffset={7} collisionPadding={12}>
+          <Tooltip.Popup className="z-50 w-max max-w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-border/70 bg-popover px-3 py-2.5 text-popover-foreground shadow-xl shadow-black/15">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Failure reason
+            </p>
+            <p className="mt-1 break-words text-xs leading-5">{reason}</p>
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  )
+}
 
 function ContentGallery({
   items,
@@ -301,9 +361,7 @@ function ContentGallery({
                 </>
               ) : null}
               {item.status === "failed" ? (
-                <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
-                  Failed
-                </span>
+                <FailureBadge error={item.error} />
               ) : null}
               {item.outputVideoUrl ? (
                 <a
@@ -645,7 +703,7 @@ function VideoReferencePair({
   )
 }
 
-export default function CreatePage() {
+export default function StudioPage() {
   const searchParams = useSearchParams()
   const characters = useQuery(api.characters.list)
   const videos = useQuery(api.videos.list)
@@ -758,6 +816,7 @@ export default function CreatePage() {
         status: video.status,
         outputVideoUrl: video.outputVideoUrl,
         thumbnailUrl: video.characterImageUrl,
+        error: video.error ?? null,
         createdAt: video.createdAt,
       })),
     [selectedCharacterVideos]

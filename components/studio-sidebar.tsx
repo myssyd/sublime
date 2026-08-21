@@ -18,7 +18,7 @@ import { api } from "@/convex/_generated/api"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { href: "/create", label: "Create", icon: IconHomeSpark },
+  { href: "/studio", label: "Studio", icon: IconHomeSpark },
   { href: "/characters", label: "Characters", icon: IconUsers },
   { href: "/library", label: "Library", icon: IconLibraryPhoto },
   { href: "/billing", label: "Credits", icon: IconBolt },
@@ -35,7 +35,7 @@ export function StudioSidebar() {
   return (
     <>
       <aside className="fixed inset-y-2 left-2 z-30 hidden w-[72px] flex-col items-center rounded-2xl bg-muted/30 py-3 backdrop-blur md:flex">
-        <Link href="/create" aria-label="Sublime home">
+        <Link href="/studio" aria-label="Sublime home">
           <BrandMark />
         </Link>
         <nav className="mt-8 flex w-full flex-1 flex-col items-center gap-1 px-2">

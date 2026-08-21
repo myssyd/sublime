@@ -139,7 +139,7 @@ export default function CharacterDetailPage() {
               }}
             />
             <Link
-              href={`/create?character=${character._id}`}
+              href={`/studio?character=${character._id}`}
               className={buttonVariants({ size: "sm" })}
             >
               <IconSparkles className="size-4" /> Create with {character.name}
@@ -196,7 +196,7 @@ export default function CharacterDetailPage() {
                 Built from {character.sourceKind === "image" ? "reference photos" : "a description"} · {identityImages.length} approved identity references
               </p>
               <Link
-                href={`/create?character=${character._id}`}
+                href={`/studio?character=${character._id}`}
                 className={cn(buttonVariants({ size: "lg" }), "mt-4 w-full sm:w-auto")}
               >
                 <IconSparkles className="size-4" /> Create something new
@@ -299,7 +299,7 @@ export default function CharacterDetailPage() {
                 <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
                   Generate a picture or clone a short performance with this identity.
                 </p>
-                <Link href={`/create?character=${character._id}`} className={cn(buttonVariants(), "mt-4")}>
+                <Link href={`/studio?character=${character._id}`} className={cn(buttonVariants(), "mt-4")}>
                   Create now <IconArrowRight className="size-4" />
                 </Link>
               </div>

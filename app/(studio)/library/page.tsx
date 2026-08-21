@@ -177,7 +177,7 @@ export default function LibraryPage() {
         description="Every photo and video created with your characters, ready to revisit or download."
         action={
           <Link
-            href="/create"
+            href="/studio"
             className={cn(
               buttonVariants({ size: "sm" }),
               "hidden sm:inline-flex"
@@ -308,7 +308,7 @@ export default function LibraryPage() {
             title={emptyLabel}
             description="Create a picture or clone a short performance and it will appear here automatically."
             action={
-              <Link href="/create" className={buttonVariants()}>
+              <Link href="/studio" className={buttonVariants()}>
                 Go to Studio <IconArrowRight className="size-4" />
               </Link>
             }
