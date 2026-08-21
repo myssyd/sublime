@@ -28,7 +28,9 @@ import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import type { CharacterImageSource } from "@/convex/lib/image"
 import type { VideoModel } from "@/convex/lib/videoModel"
-import { StudioHeader } from "@/components/studio-header"
+import { AccountMenu } from "@/components/account-menu"
+import { BrandMark } from "@/components/brand-mark"
+import { CreditBalance } from "@/components/credit-balance"
 import { StudioEmptyState } from "@/components/studio-empty-state"
 import { CharactersExperience } from "@/components/characters-experience"
 import { Button } from "@/components/ui/button"
@@ -209,7 +211,7 @@ function ContentGallery({
       <div
         role="status"
         aria-label="Loading content"
-        className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-[repeat(auto-fill,minmax(8.5rem,10rem))] sm:p-5"
+        className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-[repeat(auto-fill,minmax(8.5rem,10rem))] sm:p-5"
       >
         {Array.from({ length: visibleSkeletonCount }, (_, index) => (
           <div
@@ -260,7 +262,7 @@ function ContentGallery({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 bg-card p-4 sm:grid-cols-[repeat(auto-fill,minmax(8.5rem,10rem))] sm:p-5">
+      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-[repeat(auto-fill,minmax(8.5rem,10rem))] sm:p-5">
         {items.map((item) => {
         if (item.kind === "image") {
           return (
@@ -1344,12 +1346,17 @@ export default function StudioPage() {
 
   return (
     <div className="min-h-screen">
-      <StudioHeader
-        title="Studio"
-        description="Choose a character, then create a picture, clone a Reel, control their motion, or make them speak."
-      />
+      <div className="w-full">
+        <h1 className="sr-only">Studio</h1>
 
-      <main className="w-full px-5 pb-10 md:px-8 lg:px-10">
+        <div className="flex items-center justify-between px-5 py-4 md:hidden">
+          <BrandMark />
+          <div className="flex items-center gap-3">
+            <CreditBalance />
+            <AccountMenu placement="header" />
+          </div>
+        </div>
+
         {characters === undefined ? (
           <div className="grid min-h-96 place-items-center text-muted-foreground">
             <IconLoader2 className="size-5 animate-spin" />
@@ -1366,16 +1373,10 @@ export default function StudioPage() {
             }
           />
         ) : (
-          <div className="grid items-stretch gap-7 lg:grid-cols-[minmax(360px,470px)_minmax(0,1fr)] xl:grid-cols-[480px_minmax(0,1fr)]">
-            <aside className="min-w-0 space-y-3 lg:sticky lg:top-5">
+          <div className="flex min-h-screen flex-col bg-muted/45 md:-ml-[84px] md:w-[calc(100%+84px)] md:pl-[84px] lg:h-screen lg:min-h-0 lg:flex-row lg:overflow-hidden">
+            <aside className="min-w-0 shrink-0 space-y-3 px-4 py-5 sm:px-5 lg:w-[410px] lg:overflow-y-auto xl:w-[460px]">
               <section className="px-1">
-                <div>
-                  <h2 className="text-sm font-semibold">
-                    Your characters <span className="ml-1 text-[11px] font-medium text-muted-foreground">{characters.length}</span>
-                  </h2>
-                </div>
-
-                <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 pt-1" role="group" aria-label="Choose a character">
+                <div className="flex gap-2.5 overflow-x-auto pb-1 pt-1" role="group" aria-label="Choose a character">
                   {characters.map((character) => {
                     const active = character._id === activeCharacterId
                     return (
@@ -1427,8 +1428,8 @@ export default function StudioPage() {
                 </div>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-44px_rgba(0,0,0,0.45)]">
-                <div className="flex items-center gap-4 px-5 py-5 sm:px-6">
+              <section>
+                <div className="flex items-center gap-4 px-1 py-4">
                   <span className="size-[72px] shrink-0 overflow-hidden rounded-full border bg-secondary p-0.5 shadow-sm">
                     {selectedCharacter?.primaryImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1447,9 +1448,9 @@ export default function StudioPage() {
                 <Tabs
                   value={createMode}
                   onValueChange={(value) => setCreateMode(value as CreateMode)}
-                  className="border-t"
+                  className="mt-1"
                 >
-                  <div className="flex justify-center px-5 pt-5 sm:px-6">
+                  <div className="flex justify-center px-1 pt-3">
                     <TabsList aria-label="Creation type" className="max-w-full">
                       <TabsTrigger value="picture" className="px-2 text-xs sm:px-3 sm:text-sm"><IconPhoto className="hidden size-4 sm:block" /> Picture</TabsTrigger>
                       <TabsTrigger value="reel-clone" className="px-2 text-xs sm:px-3 sm:text-sm"><IconMovie className="hidden size-4 sm:block" /> Reel Clone</TabsTrigger>
@@ -2185,14 +2186,13 @@ export default function StudioPage() {
               </section>
             </aside>
 
-            <section className="flex min-h-0 min-w-0 flex-col">
+            <section className="mx-2 mb-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-background shadow-sm lg:my-2 lg:mr-2 lg:ml-0">
               <Tabs
                 value={contentMode}
                 onValueChange={(value) => setContentMode(value as ContentMode)}
-                className="min-h-[clamp(22rem,52vh,36rem)] flex-1 overflow-hidden rounded-3xl border bg-card shadow-[0_20px_60px_-46px_rgba(0,0,0,0.4)] lg:min-h-0"
+                className="min-h-[clamp(22rem,52vh,36rem)] flex-1 overflow-hidden lg:min-h-0"
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
-                  <h2 className="text-xl font-semibold tracking-tight">Content</h2>
+                <div className="flex justify-center px-4 py-4 sm:px-5">
                   <TabsList aria-label="Content type" className="h-10 shrink-0">
                     <TabsTrigger value="all" className="gap-2 px-4">
                       All
@@ -2256,7 +2256,7 @@ export default function StudioPage() {
             </section>
           </div>
         )}
-      </main>
+      </div>
 
       <CharactersExperience
         standalone={false}
