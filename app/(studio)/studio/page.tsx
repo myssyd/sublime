@@ -435,21 +435,25 @@ const videoModels = [
   {
     value: "kling-o3-pro",
     label: "Kling O3 Pro",
+    icon: "kling",
     description: "Default · strongest identity lock",
   },
   {
     value: "seedance-2.0-fast",
     label: "Seedance 2.0",
+    icon: "bytedance",
     description: "Multimodal motion transfer",
   },
   {
     value: "seedance-2.5",
     label: "Seedance 2.5",
+    icon: "bytedance",
     description: "Latest quality · premium",
   },
 ] as const satisfies ReadonlyArray<{
   value: VideoModel
   label: string
+  icon: ModelLogoName
   description: string
 }>
 
@@ -461,18 +465,27 @@ const pictureAspectRatios = [
 
 type PictureModel = (typeof pictureModels)[number]["value"]
 type PictureAspectRatio = (typeof pictureAspectRatios)[number]["value"]
+type ModelLogoName = "bytedance" | "nanobanana" | "kling"
 
-function PictureModelIcon({
+function ModelLogo({
   icon,
   className,
 }: {
-  icon: (typeof pictureModels)[number]["icon"]
+  icon: ModelLogoName
   className?: string
 }) {
   if (icon === "nanobanana") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M8.342 13.16H3.455c-.513 0-.772-.639-.408-1.012l1.608-1.653a3.166 3.166 0 0 1 4.565 0l.513.527.044.002c.735-1.93.786-2.809.783-5.007v-.275c-.01-1.782-.02-3.935 1.965-4.22 2.603-.375 4.504 4.219 4.815 8.299a3.166 3.166 0 0 1 3.38.774l1.609 1.653c.365.375.106 1.012-.407 1.012H19.27c.072.264.11.542.11.828v5.664c0 .914-.994 1.292-1.602.576-.229-.27-1.067-1.25-2.155-2.52-2.92 4.183-10.266 6.462-12.34 3.006h-.793a.991.991 0 1 1 0-1.982h.246c.014-1.687 1.23-3.148 2.846-3.783a7.448 7.448 0 0 0 2.76-1.889Zm7.543-2.145c0-.127-.001-.256-.005-.388a15.693 15.693 0 0 0-.632-3.939c-.38-1.282-.887-2.33-1.425-2.992-.545-.671-.906-.715-1.085-.69-.223.032-.292.098-.322.129-.05.052-.135.176-.209.45-.152.567-.15 1.286-.147 2.186v.244c.002 1.134-.009 2.028-.145 2.92a11.292 11.292 0 0 1-.537 2.08h4.507Zm-3.468 3.056c-1.636 3.166-4.981 4.71-8.118 4.87a.562.562 0 0 0 .057 1.124c3.294-.169 6.921-1.749 8.845-5.081l-.784-.913Z" />
+      </svg>
+    )
+  }
+
+  if (icon === "kling") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 180 180" fill="currentColor" className={className}>
+        <path d="M112 25c.4.1.4.1 2.5.8 10.3 3.5 21.6 10.9 27.5 20.2 4 8.4 1.6 17.8-1.2 26.1-1.9 5.1-4.1 9.6-7.1 14-.7 1.9-.7 1.9-.1 3.7 1.8 2.9 4 5 6.4 7.4.3.2.3.2 1.5 1.5 1.5 1.5 3.1 3 4.6 4.5l3.2 3.2c2.5 2.5 5.1 5.1 7.7 7.6-5.6 17.8-20.2 29-35.9 37.6-15.2 7.4-34.2 9.3-50.5 4.3-.9-.3-1.7-.6-2.6-.9-.8-.3-1.6-.5-2.5-.8-10.3-3.5-21.6-10.9-27.5-20.2-4-8.4-1.6-17.8 1.2-26.1 1.9-5.1 4.1-9.6 7.1-14 .7-1.9.7-1.9.1-3.7-1.8-2.9-4-5-6.4-7.4l-1.5-1.5c-1.5-1.5-3.1-3-4.6-4.5l-3.2-3.2c-2.5-2.5-5.1-5.1-7.7-7.6 5.1-15.7 18.3-28.3 32.6-36C73 21.2 93.4 18.5 112 25M46 45l-2.4 1.8c-2.9 2.5-5.1 5.2-7.4 8.3-.7 1-1.5 2-2.3 3.1C32 61 32 61 31 64l1.8 1.8L53 86c.7-.9 1.5-1.8 2.2-2.7C73.7 61.5 93.3 45.2 121 37c-21.3-18.1-56-8.1-75 8m48 7c2.8.8 5.1 1 8.1.8 6.4 0 12.7 1.7 17.8 5.7 6.8 7.3 7.4 15.4 7.2 25 0 .8-.1 1.6-.1 2.5 7.9-9.3 11.2-20.1 11.4-32.1-.6-4.6-2.9-8-6.4-10.9-13.5-4.5-26.6 2.1-38 9M66.3 75.3C59.3 84.1 55 94.7 56 106c1.2 6.6 3.7 10.5 8.9 14.6 5 3.3 10.2 4 16.1 3.4 14.2-3.3 27-10.2 35.1-22.7 5.8-10 9.9-20.3 6.9-31.8-1.9-5.3-5.3-8.5-10-11.5-17.5-7.1-35.5 4.4-46.7 17.3M52 94c-1.3 2.5-2.6 5-3.9 7.6-.3.7-.7 1.4-1.1 2.1-3.2 6.3-5.3 12.2-5.3 19.4 0 1 0 2-.1 3 .6 4.6 2.9 8 6.4 10.9 10.1 3.4 19.8.4 29-4 3.1-1.6 6.1-3.2 9-5-2.8-.8-5.1-1-8.1-.8-6.4 0-12.7-1.7-17.8-5.7-6.8-7.3-7.4-15.4-7.2-25 0-.8.1-1.6.1-2.5Zm75 0c-.4.4-.4.4-2.2 2.7-17.9 21.2-38.2 39.4-65.8 46.3 9.7 8.2 24.8 9.7 37 8.9 14.1-1.5 27.2-7.7 38-16.9l2.4-1.8c2.9-2.5 5.1-5.2 7.4-8.3.7-1 1.5-2 2.3-3.1 1.9-2.8 1.9-2.8 2.9-5.8l-1.8-1.8Z" />
       </svg>
     )
   }
@@ -1392,34 +1405,29 @@ export default function StudioPage() {
                           setMotionCharacterImageSelection(null)
                           setMotionImagePickerOpen(false)
                         }}
-                        className="group w-12 shrink-0 text-center"
+                        className="group w-12 shrink-0 cursor-pointer text-center"
                       >
                         <span
                           className={cn(
-                            "relative mx-auto block size-12 rounded-full bg-gradient-to-tr from-muted-foreground/20 via-border to-muted p-[2px] transition-transform group-hover:scale-[1.03]",
-                            active && "from-primary via-primary to-lime-300 shadow-[0_0_0_3px_var(--background),0_0_0_5px_color-mix(in_oklab,var(--primary)_35%,transparent)]"
+                            "relative mx-auto block size-12 rounded-full bg-transparent p-0.5 opacity-60 transition-[background-color,opacity,transform] group-hover:scale-[1.03] group-hover:bg-primary/25 group-hover:opacity-100",
+                            active && "bg-primary/50 opacity-100 group-hover:bg-primary/65"
                           )}
                         >
-                          <span className="block size-full overflow-hidden rounded-full bg-secondary p-0.5">
+                          <span className="block size-full overflow-hidden rounded-full bg-secondary">
                             {character.primaryImageUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={character.primaryImageUrl} alt={character.name} className="size-full rounded-full object-cover" />
                             ) : null}
                           </span>
-                          {active ? (
-                            <span className="absolute bottom-0 right-0 grid size-4 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground">
-                              <IconCheck className="size-2" stroke={3} />
-                            </span>
-                          ) : null}
                         </span>
-                        <span className={cn("mt-1.5 block truncate text-[10px] text-muted-foreground", active && "font-semibold text-foreground")}>
+                        <span className={cn("mt-1.5 block truncate text-[10px] text-muted-foreground/70 transition-colors group-hover:text-foreground/80", active && "font-semibold text-foreground")}>
                           {character.name}
                         </span>
                       </button>
                     )
                   })}
 
-                  <button type="button" onClick={() => setCharacterBuilderOpen(true)} className="group w-12 shrink-0 text-center" aria-label="Create a new character">
+                  <button type="button" onClick={() => setCharacterBuilderOpen(true)} className="group w-12 shrink-0 cursor-pointer text-center" aria-label="Create a new character">
                     <span className="mx-auto grid size-12 place-items-center rounded-full border border-dashed border-muted-foreground/45 bg-muted/35 text-muted-foreground transition-colors group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary">
                       <IconPlus className="size-4" stroke={1.8} />
                     </span>
@@ -1548,7 +1556,7 @@ export default function StudioPage() {
                                 const model = pictureModels.find((option) => option.value === value)
                                 return model ? (
                                   <>
-                                    <PictureModelIcon icon={model.icon} className="size-4 text-muted-foreground" />
+                                    <ModelLogo icon={model.icon} className="size-4 shrink-0 text-muted-foreground" />
                                     <span className="truncate">{model.label}</span>
                                   </>
                                 ) : null
@@ -1558,7 +1566,7 @@ export default function StudioPage() {
                           <SelectContent align="start" alignItemWithTrigger={false} className="w-64">
                             {pictureModels.map((model) => (
                               <SelectItem key={model.value} value={model.value}>
-                                <PictureModelIcon icon={model.icon} className="size-4 text-muted-foreground" />
+                                <ModelLogo icon={model.icon} className="size-4 shrink-0 text-muted-foreground" />
                                 <span className="min-w-0 flex-1">
                                   <span className="block font-medium">{model.label}</span>
                                   <span className="mt-0.5 block text-[11px] text-muted-foreground">{model.description}</span>
@@ -1766,7 +1774,7 @@ export default function StudioPage() {
                               )
                               return model ? (
                                 <>
-                                  <IconMovie className="size-4 text-muted-foreground" />
+                                  <ModelLogo icon={model.icon} className="size-4 shrink-0 text-muted-foreground" />
                                   <span className="truncate">{model.label}</span>
                                 </>
                               ) : null
@@ -1780,7 +1788,7 @@ export default function StudioPage() {
                         >
                           {videoModels.map((model) => (
                             <SelectItem key={model.value} value={model.value}>
-                              <IconMovie className="size-4 text-muted-foreground" />
+                              <ModelLogo icon={model.icon} className="size-4 shrink-0 text-muted-foreground" />
                               <span className="min-w-0 flex-1">
                                 <span className="block font-medium">
                                   {model.label}
@@ -1953,7 +1961,8 @@ export default function StudioPage() {
                         <p className="text-sm font-semibold">Video model</p>
                         <p className="mt-1 text-[11px] text-muted-foreground">Motion transfer by fal</p>
                       </div>
-                      <span className="rounded-full bg-muted px-3 py-1.5 text-xs font-medium">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium">
+                        <ModelLogo icon="kling" className="size-3.5 shrink-0 text-muted-foreground" />
                         Kling V3 Standard
                       </span>
                     </div>
