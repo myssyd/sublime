@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { Container, getContainer } from "@cloudflare/containers"
+import { handleCobaltRequest } from "./request-handler"
 
 const DISABLED_SERVICES = [
   "bilibili",
@@ -28,9 +29,18 @@ const DISABLED_SERVICES = [
 export class CobaltContainer extends Container<Env> {
   defaultPort = 9000
   requiredPorts = [9000]
-  sleepAfter = "10m"
+  // Keep the two-minute tunnel map alive between resolving and downloading.
+  sleepAfter = "3m"
   enableInternet = true
   pingEndpoint = "ping"
+
+  override async onActivityExpired() {
+    // The SDK waits for in-flight response streams before expiring activity.
+    // Cobalt did not exit on SIGTERM in production. Its only local state is
+    // the tunnel map, whose two-minute lifetime has expired by this point.
+    console.log("Cobalt idle for three minutes; stopping container")
+    await this.destroy()
+  }
 
   constructor(ctx: DurableObjectState<Record<string, never>>, env: Env) {
     super(ctx, env)
@@ -50,7 +60,9 @@ export class CobaltContainer extends Container<Env> {
 
 export default {
   fetch(request: Request, env: Env) {
-    const cobalt = getContainer(env.COBALT, "sublime-cobalt-singleton")
-    return cobalt.fetch(request)
+    return handleCobaltRequest(request, env.COBALT_API_KEY, (request) => {
+      const cobalt = getContainer(env.COBALT, "sublime-cobalt-singleton")
+      return cobalt.fetch(request)
+    })
   },
 } satisfies ExportedHandler<Env>

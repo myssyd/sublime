@@ -240,7 +240,10 @@ export const importInstagramReel = action({
         throw new Error("The Reel resolver returned an unsafe download URL")
       }
 
-      const downloadResponse = await fetch(downloadUrl, { redirect: "error" })
+      const downloadResponse = await fetch(downloadUrl, {
+        redirect: "error",
+        headers: apiKey ? { Authorization: `Api-Key ${apiKey}` } : {},
+      })
       if (!downloadResponse.ok) {
         throw new Error(
           `Could not download this Reel (${downloadResponse.status})`
